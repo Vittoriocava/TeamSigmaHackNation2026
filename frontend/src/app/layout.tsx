@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="it">
-      <body className="font-sans min-h-screen">
+      <body className="font-sans min-h-screen" suppressHydrationWarning>
         <main className="max-w-md mx-auto min-h-screen relative">
           {children}
         </main>
