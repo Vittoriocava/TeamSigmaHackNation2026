@@ -1,14 +1,16 @@
 import asyncio
 import json
 import random
-from fastapi import APIRouter, Depends, HTTPException
-from app.models import (
-    CreateGameRequest, GameBoard, BoardStop, POI, UserProfile, QuizQuestion,
-)
+
 from app.auth import get_optional_user
-from app.services.ai import generate_quiz, generate_story, generate_curiosity, generate_connection, rank_pois
 from app.db import supabase
-from app.routers.city import build_overpass_query, parse_overpass, enrich_with_wikipedia, fetch_overpass
+from app.models import (POI, BoardStop, CreateGameRequest, GameBoard,
+                        QuizQuestion, UserProfile)
+from app.routers.city import (build_overpass_query, enrich_with_wikipedia,
+                              fetch_overpass, parse_overpass)
+from app.services.ai import (generate_connection, generate_curiosity,
+                             generate_quiz, generate_story, rank_pois)
+from fastapi import APIRouter, Depends, HTTPException
 
 router = APIRouter(prefix="/api/game", tags=["game"])
 
