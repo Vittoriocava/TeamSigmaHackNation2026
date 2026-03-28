@@ -1,3 +1,0 @@
-E' da tenere conto di come è orientato l'utente: in questo modo puoi dire all'utente "guarda a sinistra e vedi il monumento x"
-si potrebbe fare una partita simile a monopoli al giorno in cui vincendo una sfida (quiz) ottieni un pezzo della mappa dove puoi mettere in evidenza qualcosa che rappresenta il posto.
-per i giocatori da casa si potrebbe fare qualcosa di simile a Conquiztador: ogni giocatore può ottenere un territorio scontrandosi con un altro tramite quiz e domande 

@@ -1,377 +1,345 @@
-# AI_AGENT.md — Come e dove viene usata l'AI in Play The City
+# AI_AGENT.md — Architettura Agenti AI in Play The City
 
-L'AI non è una feature aggiuntiva. È il motore centrale dell'app: senza AI non esiste personalizzazione, non esistono contenuti, non esiste gioco. Ogni interazione significativa passa attraverso uno o più modelli.
+L'app è costruita attorno a **5 agenti principali** in sequenza logica, più agenti di supporto per le feature secondarie. Ogni agente ha un input preciso, un output preciso e un momento di attivazione definito.
 
 ---
 
-## Mappa degli agenti AI
+## Flusso principale degli agenti
 
 ```
-                        ┌─────────────────────┐
-                        │   PROFILO UTENTE    │
-                        │  (interessi, livello │
-                        │   lingua, swipe)     │
-                        └──────────┬──────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              ▼                    ▼                    ▼
-    ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-    │  CITY GENERATOR  │  │ PERSONALIZATION  │  │  QUIZ INFERENCE  │
-    │  Claude + OSM +  │  │    AGENT         │  │  AGENT           │
-    │  Wikipedia →     │  │  Claude filtra   │  │  Claude deduce   │
-    │  lista POI       │  │  POI per profilo │  │  profilo dal     │
-    └────────┬─────────┘  └────────┬─────────┘  │  quiz iniziale   │
-             │                     │            └──────────────────┘
-             └──────────┬──────────┘
-                        ▼
-              ┌──────────────────────┐
-              │   CONTENT AGENT      │  ← Claude: generazione
-              │   Per ogni tappa:    │    contenuto principale
-              │   - quiz adattivo    │
-              │   - micro-storia     │
-              │   - curiosità        │
-              │   - filo narrativo   │
-              └──────┬───────┬───────┘
-                     │       │
-          ┌──────────┘       └──────────┐
-          ▼                             ▼
- ┌─────────────────┐         ┌─────────────────────┐
- │  VOICE AGENT    │         │  TIMELINE AGENT     │
- │  ElevenLabs:    │         │  Claude genera       │
- │  testo → voce  │         │  prompt storico →    │
- │  adattiva al   │         │  DALL-E 3 genera     │
- │  profilo       │         │  immagine dell'epoca │
- └─────────────────┘         └─────────────────────┘
-
- ┌─────────────────────────────────────────────────┐
- │  VISION AGENT  (Modalità Campo)                 │
- │  Claude Vision analizza foto scattata           │
- │  → conferma sfida / genera commento contestuale │
- └─────────────────────────────────────────────────┘
+[Utente: città + profilo]
+          │
+          ▼
+   ┌─────────────┐
+   │  AGENTE 1   │  POI Generator
+   │             │  → lista posti + ranking + budget
+   └──────┬──────┘
+          │
+          ▼
+   ┌─────────────┐
+   │  AGENTE 2   │  Itinerary Generator
+   │             │  → percorso diviso per giornate + come spostarsi
+   └──────┬──────┘
+          │
+          ▼
+   ┌─────────────┐
+   │  AGENTE 3   │  Audio/Voice Guide
+   │             │  → guida vocale on-demand + proximity GPS + radar posti vicini
+   └──────┬──────┘
+          │
+          ▼
+   ┌─────────────┐
+   │  AGENTE 4   │  Vision AR
+   │             │  → "Come era" + "Foto col Monumento"
+   └──────┬──────┘
+          │
+          ▼
+   ┌─────────────┐
+   │  AGENTE 5   │  Quiz Agent (da casa)
+   │             │  → quiz per posti, conquista territorio, difesa
+   └─────────────┘
 ```
 
 ---
 
-## Agente 1 — Profile Inference Agent
-
-**Modello:** Claude API
-**Trigger:** Onboarding (quiz iniziale) + sessioni di swipe Tinder dei posti
-**Input:** Risposte al quiz (scelte narrative, non form) + like/dislike su card POI
-**Output:** Profilo strutturato `{interests[], cultural_level, pace, style}`
-
-### Come funziona
-Il quiz iniziale non è un form con checkbox. L'utente risponde a domande del tipo:
-*"Sei a Roma per un pomeriggio. Scegli: Colosseo o Trastevere?"*
-*"Preferisci capire la storia di un posto o assaggiare il cibo locale?"*
-
-Claude riceve le 10 risposte e le interpreta in linguaggio naturale → produce un profilo semantico. Non regole if/else — comprensione del significato delle scelte.
-
-Con il tempo, lo swipe dei posti (Tinder-style) aggiorna il profilo: ogni like/dislike viene mandato a Claude con il profilo attuale → Claude aggiorna i pesi degli interessi.
-
-**Per i gruppi:** Claude riceve i profili di tutti i membri → identifica l'intersezione degli interessi → suggerisce tappe che soddisfano tutti, con note su chi apprezzerà cosa.
-
-```python
-# Prompt semplificato
-"""
-Profilo attuale: {profile_json}
-Nuovi swipe: {swipes_list}  # [{poi: "Mercato di Testaccio", liked: true}, ...]
-Aggiorna il profilo e spiega brevemente cosa è cambiato.
-Rispondi in JSON: {interests, cultural_level, preferred_pace, style_tags}
-"""
-```
-
----
-
-## Agente 2 — City Generator Agent
+## Agente 1 — POI Generator + Ranking + Budget
 
 **Modello:** Claude API + Overpass API (OSM) + Wikipedia REST + Wikidata
-**Trigger:** L'utente sceglie una città (o borgo)
-**Input:** Nome città, profilo utente, livello giocatore
-**Output:** Lista di 20–30 POI candidati con metadati e fonti
+**Trigger:** L'utente inserisce una città (o borgo) e il proprio profilo
+**Input:**
+- Nome città
+- Profilo utente: interessi, livello culturale, lingua, età
+- Budget (basso / medio / alto)
+- Durata del soggiorno (giorni)
+
+**Output:** Lista ranked di POI con metadati completi
 
 ### Come funziona
-1. **Overpass API** → fetch di tutti i POI della città classificati (monumenti, musei, mercati, chiese, botteghe, parchi, locali)
-2. **Wikipedia/Wikidata** → per ogni POI, recupera descrizione, date storiche, coordinate, immagini
-3. **Claude** → riceve la lista grezza e la raffina:
-   - Scarta i POI troppo simili tra loro
-   - Bilancia le categorie (non solo musei)
-   - Per borghi piccoli dove Wikipedia è scarna: genera il contenuto dai dati Wikidata strutturati
-   - Assegna a ogni POI un "valore narrativo" in base al profilo utente
-   - Aggiunge tag: `{category, narrative_value, difficulty, hidden_gem: bool}`
 
-**Caso speciale borghi:** Se Wikipedia non ha articolo per il comune, Claude usa i dati Wikidata (fondazione, popolazione, monumenti censiti, coordinate) per costruire il contenuto da zero. Nessun borgo rimane senza storia.
+**Step 1 — Fetch dati grezzi:**
+- Overpass API → tutti i POI della città (monumenti, musei, mercati, chiese, botteghe, parchi, ristoranti, locali)
+- Wikipedia/Wikidata → per ogni POI: descrizione, date storiche, immagini, coordinate
+- Per borghi minori dove Wikipedia è scarsa: Claude genera il contenuto dai dati strutturati di Wikidata
+
+**Step 2 — Claude rankizza e filtra:**
+```
+Input: lista POI grezzi + profilo utente + budget + durata
+Output per ogni POI:
+  - relevance_score (0–10, quanto è adatto a questo profilo)
+  - category (storia / arte / food / natura / nightlife / hidden_gem / ...)
+  - estimated_cost (gratuito / € / €€ / €€€)
+  - estimated_duration (minuti)
+  - crowd_level (basso / medio / alto — da dati OSM + ora del giorno)
+  - hidden_gem (bool — posti poco noti ma di alto valore narrativo)
+  - why_for_you (frase breve: perché questo posto è giusto per il tuo profilo)
+```
+
+**Step 3 — Bilanciamento:**
+Claude garantisce un mix bilanciato: non solo musei, non solo food. Rispetta il budget: se budget basso, priorità ai posti gratuiti o economici. Livello giocatore alto → include POI nascosti non visibili ai principianti.
+
+**Output finale:** 20–40 POI candidati ordinati per `relevance_score`, pronti per l'Agente 2.
 
 ---
 
-## Agente 3 — Personalization Agent
+## Agente 2 — Itinerary Generator
 
-**Modello:** Claude API
-**Trigger:** Post City Generator, pre-costruzione board
-**Input:** Lista POI candidati + profilo utente + livello giocatore + swipe history
-**Output:** Selezione ordinata di 10–15 POI per la partita + motivazione per ognuno
+**Modello:** Claude API + OSM Routing (OSRM o Valhalla, open source)
+**Trigger:** Post Agente 1, quando l'utente conferma il viaggio
+**Input:**
+- Lista POI rankizzata dall'Agente 1
+- Numero di giorni di permanenza
+- Profilo movimento: solo a piedi / trasporti pubblici / misto
+- Ritmo: lento (pochi posti, approfonditi) / veloce (molti posti, overview)
+- Orari disponibili per giornata (opzionale)
+
+**Output:** Itinerario strutturato per giornate con navigazione
 
 ### Come funziona
-Claude riceve la lista e il profilo e seleziona le tappe ottimali:
-- Priorità a POI con alto `narrative_value` per quel profilo
-- Livello giocatore basso → esclude POI nascosti di livello avanzato
-- Swipe history → esclude categorie sistematicamente rifiutate
-- Vincolo di bilanciamento: almeno 1 tappa per categoria principale
-- Per gruppi: trova il sottoinsieme che massimizza la soddisfazione di tutti i profili
 
-L'output include anche una **"scintilla narrativa"** — una frase che Claude usa per costruire il filo della partita (lo "Spirito del Luogo").
+**Step 1 — Claude seleziona e distribuisce:**
+- Sceglie i migliori N posti dalla lista (N dipende da giorni × ritmo)
+- Distribuisce per giornate: bilancia categorie, distanze, fatica
+- Esempio: giornata 1 centro storico, giornata 2 periferia autentica, giornata 3 natura
+- Tiene conto degli orari di apertura (da OSM) per non mandare qualcuno a un museo il lunedì
 
----
+**Step 2 — Routing tra i posti:**
+- OSM Routing (OSRM open source, zero costi) calcola il percorso reale tra ogni tappa
+- Claude traduce il percorso in istruzioni naturali: *"Dal Pantheon segui via della Rotonda per 3 minuti, giri a sinistra in piazza Navona"*
+- Se trasporti pubblici: aggiunge linea bus/metro + fermata (da OSM public transport data)
+- Stima tempi realistici: visita + spostamento + margine
 
-## Agente 4 — Content Agent
-
-**Modello:** Claude API
-**Trigger:** Per ogni tappa della board al momento della generazione
-**Input:** POI (nome, dati Wikipedia/Wikidata), profilo utente, filo narrativo della partita, tappa precedente
-**Output:** Contenuto completo della tappa
-
-### Cosa genera per ogni tappa
-
-**Quiz adattivo (3 domande, difficoltà progressiva)**
-```
-Facile:   "In che anno fu costruito il Pantheon?"  → scelta multipla
-Medio:    "Quale imperatore commissionò il Pantheon attuale?"
-Difficile: "Perché il Pantheon è rimasto intatto mentre altri monumenti romani no?"
-```
-La difficoltà si calibra sul livello culturale del profilo e sulla performance nelle tappe precedenti della stessa sessione.
-
-**Micro-storia contestuale (200–300 parole)**
-Non la scheda Wikipedia. Una storia in prima persona, un aneddoto, un dettaglio umano. Tono e registro adattati al profilo: bambino → narrazione semplice e visiva; esperto → dettagli storici densi.
-
-**Curiosità nascosta**
-Un fatto sorprendente che la maggior parte dei turisti non conosce. *"Il Pantheon affonda di 2,5 cm ogni secolo ma non è mai stato restaurato perché..."*
-
-**Connessione narrativa**
-Claude collega la tappa corrente alla precedente attraverso il filo dello "Spirito del Luogo". L'utente sente che sta vivendo una storia coerente, non una lista di posti.
-
-**Prompt per ElevenLabs**
-Claude riscrive la micro-storia nel registro vocale appropriato (diverso da quello scritto) e indica il tono emotivo al sintetizzatore.
-
-**Prompt per DALL-E (linea temporale)**
-Per ogni tappa, Claude genera 3–4 prompt storici precisi:
-```
-"Il Pantheon di Roma nel 125 d.C., fotorealistico, costruzione appena completata,
-marmi bianchi lucidi, romani in toga nella piazza antistante, cielo azzurro,
-prospettiva frontale grandangolare"
+**Step 3 — Output strutturato:**
+```json
+{
+  "days": [
+    {
+      "day": 1,
+      "theme": "Roma Antica",
+      "stops": [
+        {
+          "poi_id": "colosseo",
+          "arrival_time": "09:30",
+          "duration_min": 90,
+          "how_to_get_here": "A piedi 12 min da hotel, via Labicana",
+          "transport": "piedi",
+          "notes": "Arriva presto, entro le 10 è meno affollato"
+        },
+        ...
+      ]
+    }
+  ]
+}
 ```
 
----
-
-## Agente 5 — Voice Agent
-
-**Modello:** ElevenLabs API
-**Trigger:** Ogni volta che una micro-storia o curiosità viene mostrata
-**Input:** Testo generato da Claude + parametri tono (dal profilo)
-**Output:** Audio stream MP3
-
-### Come funziona
-- Claude ha già preparato il testo nel registro vocale corretto
-- ElevenLabs riceve il testo + `voice_id` scelto in base al profilo e alla città
-- La risposta è uno stream audio diretto → riprodotto nel browser con `<audio>` senza buffering
-- In Modalità Campo: parte automaticamente all'arrivo sulla tappa, l'utente cammina e ascolta
-
-**Voci per città (esempio):**
-- Roma → voce maschile profonda, ritmo lento, tono solenne
-- Napoli → voce calda, cadenza vivace
-- Profilo bambino → voce femminile dolce, ritmo lento, parole semplici
+L'itinerario viene mostrato come mappa interattiva (Leaflet) con le tappe collegate da linee di percorso, e come lista scrollabile con timeline oraria.
 
 ---
 
-## Agente 6 — Timeline Image Agent
+## Agente 3 — Audio/Voice Guide
 
-**Modello:** Claude API → DALL-E 3 (OpenAI)
-**Trigger:** Apertura della scheda tappa (lazy load)
-**Input:** Nome POI + dati storici Wikipedia/Wikidata
-**Output:** 3–4 immagini del luogo in epoche diverse, cachate in DB
+**Modello:** Claude API + ElevenLabs API + Geolocation API (browser)
+**Trigger:** Tre modalità di attivazione distinte
+**Input:** POI corrente o rilevato + profilo utente
+**Output:** Audio narrativo generato e streamato
 
-### Come funziona
-**Step 1 — Claude genera i prompt storici:**
-Riceve i dati del luogo e produce un prompt DALL-E preciso per ogni epoca significativa. Include contesto visivo (abbigliamento, vegetazione, stato del monumento, luce), prospettiva, stile realistico.
+### Tre modalità di attivazione
 
-**Step 2 — DALL-E 3 genera le immagini:**
-Ogni prompt → immagine 1024×1024. Le immagini vengono salvate in Supabase Storage con chiave `{poi_id}_{era}`.
+**A — On Demand (manuale)**
+L'utente è su una scheda POI e preme "Raccontami questo posto". Claude genera la narrazione → ElevenLabs la vocalizza → stream audio parte. Funziona anche senza GPS, anche da casa.
 
-**Cache:** Le immagini si generano una sola volta. Le richieste successive per lo stesso POI+epoca servono dal DB. Riduce costi e latenza drasticamente.
+**B — Proximity GPS (semi-automatico)**
+Il GPS rileva che l'utente è entro 50 metri da un POI dell'itinerario. Compare un banner: **"Sei vicino al Pantheon — vuoi sapere di più?"** con un countdown di 5 secondi. Se non risponde → accetta automaticamente e l'audio parte. L'utente cammina e ascolta senza guardare lo schermo.
+
+```
+GPS position → distanza da ogni POI itinerario
+→ se distanza < 50m e POI non ancora visitato oggi
+  → mostra banner "Vuoi sapere di più?" (countdown 5s)
+  → se accetta o timeout → chiama Claude → ElevenLabs → audio
+  → segna POI come "narrato" (non si riattiva per 24h)
+```
+
+**C — Radar Posti Vicini (scoperta automatica)**
+Mentre l'utente si muove, un processo in background scansiona un raggio di 200 metri e rileva **posti interessanti NON nell'itinerario**. Se trova qualcosa con `relevance_score` alto per quel profilo → genera una narrazione breve (30–60 secondi) e la propone.
+
+Questo è il meccanismo che porta alla scoperta autentica: stai camminando verso il Colosseo e passi davanti a una piccola chiesa medievale che non è nel tuo itinerario. L'agente la riconosce, valuta che sei un appassionato di storia, e ti dice *"Aspetta un secondo — quella chiesa che hai appena superato nasconde qualcosa di insolito..."*
+
+```
+ogni 30 secondi (solo se in Modalità Campo):
+  → fetch POI entro 200m da OSM (esclusi già narrati, esclusi già in itinerario)
+  → passa lista a Claude con profilo utente
+  → Claude valuta: c'è qualcosa che vale la pena raccontare?
+  → se sì: genera narrazione breve + ElevenLabs → propone all'utente
+  → se no: silenzio (non interrompe inutilmente)
+```
+
+### Come Claude genera la narrazione
+
+Il tono e il registro sono sempre adattati al profilo. Non script fissi — ogni narrazione è generata live:
+
+```
+Prompt base per ogni POI:
+"""
+Sei la guida vocale di {utente.display_name} a {città}.
+POI: {poi_name} — dati: {wikipedia_excerpt} + {wikidata_facts}
+Profilo: {interessi}, livello {cultural_level}, lingua {lingua}
+Contesto: {modalità: on-demand | proximity | radar}
+
+Per "on-demand": narrazione completa, 2-3 minuti, includi storia, curiosità,
+  connessione con il percorso del giorno.
+Per "proximity": narrazione media, 60-90 secondi, focus sul perché è speciale
+  questo momento (orario, stagione, cosa ha appena visto prima).
+Per "radar": narrazione breve, 30-45 secondi, aggancio curioso immediato
+  per fermare l'utente.
+
+Parla in prima persona come se fossi il luogo stesso oppure un narratore
+che conosce l'utente. Non iniziare mai con il nome del posto.
+"""
+```
+
+### ElevenLabs — voce adattiva
+
+- Voce scelta in base a profilo + città (Roma → voce profonda; Napoli → cadenza vivace)
+- Bambini/famiglie → voce calda, ritmo lento, parole semplici
+- Esperti → voce densa, ritmo medio, termini tecnici
+- Stream diretto nel browser: l'audio parte entro 1–2 secondi dall'invio del testo
 
 ---
 
-## Agente 7 — Vision Agent (due modalità)
+## Agente 4 — Vision AR
 
-**Modello:** Claude Vision API + DALL-E 3
-**Trigger:** Utente apre la fotocamera su una tappa in Modalità Campo
-**Due esperienze distinte:**
+**Modello:** Claude Vision API + DALL-E 3 + SAM (Segment Anything, via Replicate)
+**Trigger:** Utente apre la fotocamera su un POI in Modalità Campo
+**Due esperienze:**
 
----
+### 4a. "Come era" — Viaggio nel Tempo
 
-### 7a. "Come era" — Viaggio nel Tempo
-
-**Input:** Foto scattata dall'utente (edificio/piazza/monumento) + POI attivo
-**Output:** Overlay composito: foto reale + immagine storica sovrapposta
+**Input:** Foto scattata dal luogo + POI attivo + epoca scelta
+**Output:** Overlay composito foto reale + ricostruzione storica AI
 
 **Flusso:**
-1. Claude Vision riceve la foto e conferma il POI ripreso (*"Sì, è il Pantheon, prospettiva frontale"*)
-2. Recupera dal cache Supabase l'immagine DALL-E già generata per l'epoca selezionata
-3. Il frontend compone l'overlay: immagine storica semi-trasparente sovrapposta alla foto reale
-4. Cursore di dissoluzione presente → passato controllabile dall'utente
-5. Foto salvabile e condivisibile con watermark "Play The City" → promozione organica
+1. Claude Vision → conferma il POI nella foto e rileva la prospettiva
+2. Recupera immagine DALL-E già cachata per quel POI + epoca (generata dall'Agente Supporto Timeline)
+3. Frontend Canvas → overlay con cursore dissolve presente → passato
+4. Foto risultante salvabile con watermark "Play The City" → condivisione organica
 
-```python
-# Step 1 — Claude Vision identifica il POI e la prospettiva
-"""
-Foto allegata. Il giocatore si trova al POI: {poi_name}.
-Conferma che il soggetto principale della foto è questo luogo.
-Indica la prospettiva (frontale, laterale, dall'alto) per allineare
-correttamente l'overlay storico.
-Rispondi: {confirmed: bool, perspective: str, notes: str}
-"""
+### 4b. "Foto col Monumento" — Souvenir AI
 
-# Step 2 — compositing frontend (no AI, solo CSS/Canvas)
-# overlay DALL-E image con opacity variabile sul canvas della foto scattata
-```
-
----
-
-### 7b. "Foto col Monumento" — Souvenir AI
-
-**Input:** Selfie o foto con il monumento visibile + POI attivo + profilo utente
-**Output:** Foto composita: utente nella scena storica ricostruita da DALL-E
+**Input:** Selfie con monumento visibile + POI attivo
+**Output:** Utente inserito nella scena storica ricostruita
 
 **Flusso:**
-1. Claude Vision segmenta il soggetto umano dalla foto (separa persona da sfondo)
-2. Claude genera un prompt DALL-E specifico per la composizione: luogo nell'epoca scelta, con spazio per inserire il soggetto, prospettiva coerente con la foto originale
-3. DALL-E 3 genera lo sfondo storico
-4. Frontend compone: soggetto ritagliato (da Vision) + sfondo storico (da DALL-E)
-5. Risultato: il giocatore è fisicamente dentro la scena storica (es: davanti al Colosseo integro, anno 80 d.C.)
-6. Salvata nel profilo come "Ricordo di conquista" del POI — visibile nella pagina proprietà
+1. Claude Vision → identifica posizione e dimensioni del soggetto umano
+2. SAM (Segment Anything) → segmentazione precisa soggetto/sfondo
+3. Claude → genera prompt DALL-E per sfondo storico coerente (prospettiva, luce, spazio per il soggetto)
+4. DALL-E 3 → sfondo storico fotorealistico
+5. Canvas API → compositing: soggetto ritagliato + sfondo storico
+6. Salvata nel profilo come "Ricordo di conquista" del POI
 
-```python
-# Step 1 — Claude Vision: segmentazione soggetto
-"""
-Foto allegata. Identifica e descrivi la posizione del soggetto umano
-(in piedi, centrato, sfondo occupato da X%).
-Rispondi: {subject_position: str, background_coverage: float,
-           suggested_crop: {x,y,w,h}}
-"""
-
-# Step 2 — Claude: genera prompt DALL-E per sfondo storico coerente
-"""
-POI: {poi_name}. Epoca: {era}.
-Il soggetto è in piedi al centro, sfondo deve occupare 70% dell'immagine.
-Prospettiva: leggermente rialzata, grandangolo.
-Genera un prompt DALL-E 3 per lo sfondo storico fotorealistico,
-senza persone in primo piano (spazio riservato al soggetto).
-"""
-
-# Step 3 — DALL-E 3: genera sfondo storico
-# Step 4 — frontend Canvas API: compositing soggetto + sfondo
-```
-
-**Nota tecnica:** la segmentazione precisa del soggetto richiede un modello dedicato (es. SAM — Segment Anything Model di Meta, disponibile via Replicate API) per risultati ottimali. Per il MVP si può usare una maschera approssimata da Claude Vision con rifinimento canvas.
-
-| Modalità Vision | Modelli coinvolti | Latenza stimata |
-|----------------|------------------|-----------------|
-| "Come era" | Claude Vision + cache DALL-E | ~2–3 sec |
-| "Foto col Monumento" | Claude Vision + Claude + DALL-E 3 (+ SAM) | ~8–12 sec |
+| Modalità | Pipeline | Latenza |
+|----------|----------|---------|
+| "Come era" | Vision + cache | ~2–3 sec |
+| "Foto col Monumento" | Vision + SAM + Claude + DALL-E | ~8–12 sec |
 
 ---
 
-## Agente 8 — Quiz Session Agent (Multiplayer)
+## Agente 5 — Quiz Agent (da casa)
 
 **Modello:** Claude API
-**Trigger:** Host crea una sessione quiz online
-**Input:** Città scelta + profili aggregati dei partecipanti
-**Output:** Set di 10–20 domande bilanciate per il gruppo
+**Trigger:** Tre contesti di attivazione
+**Input:** POI target + profilo utente + storico domande già poste
+**Output:** Set di domande calibrate + feedback narrativo
 
-### Come funziona
-Claude riceve i profili di tutti i partecipanti e genera domande:
-- Difficoltà media tra tutti i livelli presenti
-- Varietà di categorie (non solo storia)
-- Domande con una risposta chiara e verificabile (no ambiguità)
-- Fonte inclusa in ogni domanda (Wikipedia/Wikidata) per il Verified Source Layer
+### Tre contesti
 
-Le domande vengono generate prima dell'inizio della sessione e servite in sequenza. Supabase Realtime sincronizza i countdown e i punteggi tra tutti i client.
+**A — Raccolta Pezzi (pre-conquista)**
+Da casa, il giocatore vuole accumulare i 3 pezzi di un POI per pre-reclamarlo.
+Claude genera domande specifiche su quel POI. Risposta corretta → pezzo guadagnato. Difficoltà media: non troppo facile (perde valore) non impossibile (frustrante).
 
----
+**B — GeoGuessr del Posto**
+Claude seleziona un dettaglio visivo del POI (una foto di un frammento architettonico, un'iscrizione, un angolo poco noto) e chiede: *"In quale quartiere di Roma si trova questo dettaglio?"*. L'utente sceglie tra 4 opzioni. Più difficile del quiz normale → più monete.
 
-## Agente 9 — Territory Quiz Agent
+**C — Difesa Territorio (settimanale)**
+Il giocatore deve difendere un POI già conquistato. Claude genera domande progressivamente più difficili in base al `tier` del territorio:
+- **Tier 1** (stabile, prima settimana): domande base, Wikipedia-level
+- **Tier 2** (a rischio, seconda settimana): dettagli meno noti
+- **Tier 3** (contendibile, terza+ settimana): domande da esperto, solo chi conosce davvero il posto risponde
 
-**Modello:** Claude API
-**Trigger:** Giocatore vuole difendere il territorio di un POI da casa
-**Input:** POI specifico + livello difficoltà attuale (tier 1/2/3) + storico risposte precedenti
-**Output:** Quiz di difesa (3 domande, più difficili man mano che il territorio invecchia)
+Claude tiene traccia delle domande già poste sullo stesso POI allo stesso utente → non ripete mai.
 
-### Come funziona
-Il quiz di difesa è diverso da quello di scoperta. È più specifico, più profondo, progressivamente più difficile:
-- **Tier 1** (difesa normale): domande di livello base sul POI
-- **Tier 2** (territorio a rischio): domande su dettagli meno noti
-- **Tier 3** (contendibile): domande che solo un vero esperto del luogo conoscerebbe
-
-Claude tiene conto delle domande già poste nelle sessioni precedenti → non ripete mai la stessa domanda allo stesso utente sullo stesso POI.
+### Sessione Quiz Multiplayer (da casa)
+Lobby pubblica o privata (codice stanza, 2–8 giocatori). Claude riceve i profili aggregati e genera un set bilanciato: difficoltà media del gruppo, mix di categorie, domande con risposta verificabile e fonte citata (Verified Source Layer). Supabase Realtime sincronizza countdown e punteggi. Al termine: monete proporzionali al punteggio.
 
 ---
 
-## Agente 10 — Itinerary Agent
+## Agenti di Supporto
 
-**Modello:** Claude API + OSM routing
-**Trigger:** Conferma del viaggio (prima di partire)
-**Input:** Lista tappe ordinate + modalità spostamento + orari disponibili
-**Output:** Itinerario pratico con tempi, percorso, note logistiche
+### Timeline Image Agent
+**Modello:** Claude → DALL-E 3
+**Trigger:** Prima apertura di una scheda POI (lazy, asincrono)
+Claude genera 3–4 prompt storici precisi per il POI → DALL-E 3 produce le immagini → cachate in Supabase Storage. Richiesta successiva serve dalla cache. Le immagini alimentano sia la UI timeline che l'Agente 4 Vision.
 
-### Come funziona
-Claude riceve le tappe selezionate e produce:
-- Ordine ottimale di visita (minimizza spostamenti, rispetta orari apertura)
-- Stima tempi realistici (visita + spostamento)
-- Note contestuali: *"Arrivi al mercato alle 11 — è il momento migliore, il pomeriggio è più affollato"*
-- Alternative se un posto è chiuso
+### Profile Inference Agent
+**Modello:** Claude
+**Trigger:** Quiz iniziale di onboarding + batch ogni 10 swipe (Tinder dei posti)
+Interpreta le risposte narrative del quiz e i like/dislike dei luoghi → produce e aggiorna il profilo strutturato `{interests[], cultural_level, pace, style}`. Per i gruppi: interseca i profili → itinerario bilanciato per tutti.
+
+### Territory Agent (logica, non AI)
+Calcola il decay settimanale delle proprietà, aggiorna i tier, notifica il giocatore quando un territorio è a rischio. Non usa AI — è logica pura su Supabase con cron job settimanale.
 
 ---
 
-## Flusso dati AI completo (esempio: utente arriva a Roma)
+## Flusso completo — esempio reale
 
 ```
-1. [PROFILE INFERENCE] Claude legge quiz + swipe → profilo: {food, storia moderna, casual, IT}
-
-2. [CITY GENERATOR] OSM → 80 POI Roma. Wikipedia → metadati.
-   Claude → seleziona 25 POI bilanciati, scarta duplicati, valorizza hidden gems
-
-3. [PERSONALIZATION] Claude → 12 tappe finali per questo profilo.
-   Spirito del luogo: "Roma è una città che mangia la storia a colazione"
-
-4. [CONTENT] Per ogni tappa, Claude genera:
-   → quiz (3 diff.) + storia (tono casual + food angle) + curiosità + connessione
-
-5. [VOICE] ElevenLabs → audio stream della storia, voce Roma-solenne
-
-6. [TIMELINE] Claude → 4 prompt DALL-E per "Mercato di Testaccio"
-   DALL-E 3 → immagini 1800, 1930, 1970, oggi → salvate in cache
-
-7. [GPS] Utente arriva al Mercato → sblocco fisico → tappa colorata
-
-8. [VISION] Sfida: "Fotografa la scritta in ferro battuto sull'ingresso"
-   Claude Vision → conferma + "Quella scritta fu aggiunta nel 1921 quando..."
-
-9. [TERRITORY] Conquista! Quiz di difesa generato per la settimana prossima
-
-10. [ITINERARY] Claude → prossima tappa ottimale, percorso a piedi 8 minuti
+Utente: "Vado a Roma 3 giorni, mi piace la storia, budget medio, solo a piedi"
+          │
+          ▼
+[AGENTE 1] OSM + Wikipedia → 60 POI grezzi
+           Claude rankizza: Colosseo (9.2), Pantheon (8.8), Trastevere (8.5)...
+           Filtra per budget medio, esclude posti cari senza valore narrativo
+           Output: 25 POI candidati con score + stima costo + durata
+          │
+          ▼
+[AGENTE 2] Claude distribuisce su 3 giorni, ritmo medio (10 posti/giorno)
+           OSRM calcola percorsi a piedi tra ogni tappa
+           Output: itinerario giornaliero con orari + "Dal Pantheon a piazza Navona:
+           4 min a piedi, giri a sinistra dopo la fontana"
+          │
+          ▼ (utente è in città, cammina)
+[AGENTE 3 — Proximity] GPS: utente a 40m dal Pantheon
+           Banner: "Sei vicino al Pantheon — vuoi sapere di più?" [5s countdown]
+           Silenzio → auto-accept → Claude genera narrazione proximity →
+           ElevenLabs → audio in auricolare: "Non guardare ancora in su.
+           Prima ascolta: quello che stai per vedere ha un buco nel tetto
+           che non è mai stato riparato in 2000 anni. Ecco perché..."
+          │
+[AGENTE 3 — Radar] 200m più avanti, fuori itinerario: piccola chiesa medievale
+           Claude valuta: relevance alta per profilo "storia" → propone
+           "C'è qualcosa di strano in quella chiesa sul lato destro..."
+          │
+          ▼ (all'uscita dal Pantheon)
+[AGENTE 4 — "Come era"] Utente fotografa il Pantheon
+           Claude Vision: "Confermato, prospettiva frontale"
+           Cache: immagine DALL-E anno 125 d.C. → overlay sul canvas
+           Cursore: oggi ↔ 125 d.C.
+          │
+          ▼ (la sera, a casa)
+[AGENTE 5] Utente vuole il Colosseo per domani
+           3 quiz sul Colosseo → 3 pezzi guadagnati → pre-reclamo attivo
+           Domani, GPS al Colosseo → conquista confermata → territorio suo per 7 giorni
 ```
 
 ---
 
-## Costi e ottimizzazioni
+## Tabella riepilogativa
 
-| Agente | Modello | Quando | Ottimizzazione |
-|--------|---------|--------|----------------|
-| Profile Inference | Claude | Onboarding + ogni swipe batch | Batch swipe ogni 10 swipe, non realtime |
-| City Generator | Claude | Una volta per città | Cache per città popolari (Roma, Milano) |
-| Content Agent | Claude | Generazione board | Pre-generazione asincrona mentre l'utente è in viaggio |
-| Voice Agent | ElevenLabs | On-demand per tappa | Cache audio per testo identico |
-| Timeline Images | DALL-E 3 | Prima apertura tappa | Cache permanente in Supabase Storage |
-| Vision Agent | Claude Vision | Solo sfide foto | Nessuna cache — ogni foto è unica |
-| Quiz Multiplayer | Claude | Inizio sessione | Generazione batch pre-sessione |
-| Territory Quiz | Claude | Difesa settimanale | Pool di domande pre-generate per POI popolari |
-
-**Regola generale:** tutto ciò che può essere pre-generato o cachato, lo è. L'unica AI chiamata in tempo reale obbligatoria è Claude Vision (foto uniche) e il Profile Update (swipe batch).
+| Agente | Modello/i | Quando | Output |
+|--------|-----------|--------|--------|
+| 1 — POI Generator | Claude + OSM + Wikipedia | Scelta città | Lista POI ranked + budget |
+| 2 — Itinerary | Claude + OSRM | Conferma viaggio | Piano giornaliero + navigazione |
+| 3 — Audio Guide | Claude + ElevenLabs | On-demand / GPS proximity / Radar | Audio stream narrativo |
+| 4 — Vision AR | Claude Vision + DALL-E + SAM | Fotocamera aperta | Overlay storico / Souvenir composito |
+| 5 — Quiz | Claude | Da casa (pezzi / difesa / multiplayer) | Domande adattive + monete |
+| Support: Timeline | Claude + DALL-E 3 | Prima apertura tappa | Immagini storiche cachate |
+| Support: Profile | Claude | Onboarding + swipe batch | Profilo strutturato aggiornato |
+| Support: Territory | Logica Supabase | Cron settimanale | Decay tier + notifiche |
