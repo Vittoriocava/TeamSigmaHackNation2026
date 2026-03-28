@@ -151,8 +151,9 @@ Ogni oggetto deve avere questi campi:
             pass
         return None
 
+    seen_ids: set[str] = set()
     result = []
-    for item in raw:
+    for idx, item in enumerate(raw):
         name = item.get("name", "").strip()
         if not name:
             continue
@@ -176,7 +177,11 @@ Ogni oggetto deve avere questi campi:
         else:
             continue  # no usable coordinates at all
 
-        poi_id = f"ai_{hashlib.md5(name.encode()).hexdigest()[:10]}"
+        # Ensure unique IDs — include index to avoid hash collisions on same name
+        base_id = f"ai_{hashlib.md5(name.encode()).hexdigest()[:10]}"
+        poi_id = base_id if base_id not in seen_ids else f"{base_id}_{idx}"
+        seen_ids.add(poi_id)
+
         result.append({
             "id": poi_id,
             "name": name,
@@ -392,6 +397,116 @@ Deduci e rispondi SOLO con JSON:
 
     text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
     return _extract_json_object(text)
+
+
+async def generate_trip_itinerary(
+    city: str,
+    pois: list[dict],
+    trip_profile,  # TripProfile — avoid circular import
+    user_profile: UserProfile,
+) -> list[dict]:
+    """Generate a day-by-day itinerary from a list of liked POIs."""
+    import math as _math
+
+    poi_list = json.dumps(
+        [
+            {
+                "id": p.get("id", ""),
+                "name": p.get("name", ""),
+                "category": p.get("category", "attraction"),
+                "estimated_duration": p.get("estimated_duration", 45),
+                "estimated_cost": p.get("estimated_cost", "gratuito"),
+                "lat": p.get("lat", 0),
+                "lng": p.get("lng", 0),
+                "description": (p.get("description") or "")[:120],
+            }
+            for p in pois
+        ],
+        ensure_ascii=False,
+    )
+
+    prompt = f"""Sei un esperto pianificatore di viaggi italiani.
+Crea un itinerario di {trip_profile.days} giorni a {city}, Italia.
+
+Profilo viaggio:
+- Giorni disponibili: {trip_profile.days}
+- Budget: {trip_profile.budget}
+- Gruppo: {trip_profile.group}
+- Interessi: {trip_profile.interests}
+- Ritmo: {trip_profile.pace}
+- Stile: {trip_profile.experience_type}
+
+POI scelti dal viaggiatore: {poi_list}
+
+Istruzioni:
+- Distribuisci logicamente i POI nei {trip_profile.days} giorni per vicinanza geografica
+- Orari realistici: mattina 9:00-13:00, pomeriggio 14:00-18:00, sera 19:00+
+- Indica come spostarsi tra i posti (piedi/bus/metro/taxi)
+- Aggiungi suggerimenti pranzo e cena vicino ai luoghi del giorno
+- Ritmo "{trip_profile.pace}": slow = max 3 posti/giorno, medium = 4-5, fast = 6+
+
+OUTPUT: SOLO array JSON valido, {trip_profile.days} oggetti.
+
+Ogni oggetto giorno:
+{{
+  "day": 1,
+  "theme": "titolo descrittivo del giorno",
+  "stops": [
+    {{
+      "poi_id": "id",
+      "poi_name": "nome",
+      "arrival_time": "09:00",
+      "duration_min": 60,
+      "transport": "piedi",
+      "distance_from_prev": "500m a piedi",
+      "tips": "consiglio pratico utile per visitare questo posto"
+    }}
+  ],
+  "lunch_suggestion": "zona o tipo di posto per pranzo",
+  "dinner_suggestion": "zona o tipo di posto per cena",
+  "total_cost_estimate": "€/€€/€€€"
+}}
+
+["""
+
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=4000)
+    if not text.strip().startswith("["):
+        text = "[" + text
+
+    try:
+        days = _extract_json_array(text)
+        # Ensure correct day numbers
+        for i, d in enumerate(days):
+            d["day"] = i + 1
+        return days
+    except Exception:
+        # Fallback: simple day split
+        stops_per_day = max(1, _math.ceil(len(pois) / max(trip_profile.days, 1)))
+        result = []
+        for d in range(trip_profile.days):
+            chunk = pois[d * stops_per_day : (d + 1) * stops_per_day]
+            result.append(
+                {
+                    "day": d + 1,
+                    "theme": f"Giorno {d + 1} a {city}",
+                    "stops": [
+                        {
+                            "poi_id": p.get("id", ""),
+                            "poi_name": p.get("name", ""),
+                            "arrival_time": "09:00",
+                            "duration_min": p.get("estimated_duration", 45),
+                            "transport": "piedi",
+                            "distance_from_prev": "",
+                            "tips": "",
+                        }
+                        for p in chunk
+                    ],
+                    "lunch_suggestion": "Centro città",
+                    "dinner_suggestion": "Centro città",
+                    "total_cost_estimate": "€€",
+                }
+            )
+        return result
 
 
 def question_hash(q: QuizQuestion) -> str:

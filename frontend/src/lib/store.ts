@@ -49,6 +49,56 @@ export interface POI {
   why_for_you: string;
 }
 
+export interface TripProfile {
+  days: number;
+  budget: "economico" | "medio" | "comfort" | "lusso";
+  group: "solo" | "coppia" | "famiglia" | "gruppo";
+  interests: string[];
+  pace: "slow" | "medium" | "fast";
+  experienceType: "classico" | "esploratore" | "mix";
+}
+
+export interface RankedPOI extends POI {
+  crowd_level: string;
+}
+
+export interface ItineraryStop {
+  poi_id: string;
+  poi_name: string;
+  arrival_time: string;
+  duration_min: number;
+  transport: string;
+  distance_from_prev: string;
+  tips: string;
+}
+
+export interface ItineraryDay {
+  day: number;
+  theme: string;
+  stops: ItineraryStop[];
+  lunch_suggestion: string;
+  dinner_suggestion: string;
+  total_cost_estimate: string;
+}
+
+export interface TripState {
+  city: string;
+  tripProfile: TripProfile | null;
+  rankedPois: RankedPOI[];
+  likedPois: RankedPOI[];
+  itinerary: ItineraryDay[];
+}
+
+export interface SavedItinerary {
+  id: string;
+  city: string;
+  createdAt: string;
+  days: number;
+  likedPoisCount: number;
+  itinerary: ItineraryDay[];
+  tripProfile: TripProfile;
+}
+
 interface AppStore {
   user: User | null;
   profile: Profile | null;
@@ -57,14 +107,29 @@ interface AppStore {
   coins: number;
   isHydrated: boolean;
 
+  // Trip planning (not persisted — session only)
+  trip: TripState;
+  // Saved itineraries (persisted)
+  savedItineraries: SavedItinerary[];
+
   setUser: (user: User | null) => void;
   setProfile: (profile: Profile | null) => void;
   setCurrentGame: (game: GameState | null) => void;
   setToken: (token: string | null) => void;
   setCoins: (coins: number) => void;
   completeStop: (index: number) => void;
+  setTrip: (trip: Partial<TripState>) => void;
+  saveItinerary: (itinerary: SavedItinerary) => void;
   reset: () => void;
 }
+
+const DEFAULT_TRIP: TripState = {
+  city: "",
+  tripProfile: null,
+  rankedPois: [],
+  likedPois: [],
+  itinerary: [],
+};
 
 export const useStore = create<AppStore>()(
   persist(
@@ -75,12 +140,23 @@ export const useStore = create<AppStore>()(
       token: null,
       coins: 0,
       isHydrated: false,
+      trip: DEFAULT_TRIP,
+      savedItineraries: [],
 
       setUser: (user) => set({ user }),
       setProfile: (profile) => set({ profile }),
       setCurrentGame: (game) => set({ currentGame: game }),
       setToken: (token) => set({ token }),
       setCoins: (coins) => set({ coins }),
+      setTrip: (partial) =>
+        set((state) => ({ trip: { ...state.trip, ...partial } })),
+      saveItinerary: (itinerary) =>
+        set((state) => ({
+          savedItineraries: [
+            itinerary,
+            ...state.savedItineraries.filter((s) => s.id !== itinerary.id),
+          ].slice(0, 10), // keep last 10
+        })),
       completeStop: (index) =>
         set((state) => {
           if (!state.currentGame) return {};
@@ -102,6 +178,8 @@ export const useStore = create<AppStore>()(
           currentGame: null,
           token: null,
           coins: 0,
+          trip: DEFAULT_TRIP,
+          savedItineraries: [],
         }),
     }),
     {
@@ -112,6 +190,7 @@ export const useStore = create<AppStore>()(
         currentGame: state.currentGame,
         token: state.token,
         coins: state.coins,
+        savedItineraries: state.savedItineraries,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) state.isHydrated = true;

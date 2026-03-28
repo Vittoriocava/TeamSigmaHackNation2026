@@ -52,7 +52,7 @@ const CITY_EMOJIS: Record<string, string> = {
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, isHydrated } = useStore();
+  const { user, isHydrated, savedItineraries } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -69,9 +69,9 @@ export default function HomePage() {
     setSuggestions(ITALIAN_CITIES.filter((c) => c.toLowerCase().startsWith(q)).slice(0, 6));
   }, [searchQuery]);
 
-  const goToCity = (city: string, mode = "solo") => {
+  const goToCity = (city: string) => {
     setShowSuggestions(false);
-    router.push(`/board/new?city=${encodeURIComponent(city)}&mode=${mode}`);
+    router.push(`/pianifica/${encodeURIComponent(city)}`);
   };
 
   if (!isHydrated || !user) return null;
@@ -204,29 +204,52 @@ export default function HomePage() {
       </section>
 
       {/* Organizza */}
-      <section className="px-4 mb-24">
+      <section className="px-4 mb-6">
         <h2 className="font-display text-lg font-semibold mb-3">Organizza un viaggio</h2>
-        <div className="space-y-2">
-          {[
-            { mode: "solo", title: "Avventura Solo", desc: "Percorso AI personalizzato solo per te", emoji: "🎯" },
-            { mode: "group", title: "Gruppo", desc: "Gioca con amici, sfida cooperativa", emoji: "👥" },
-            { mode: "open", title: "Sessione Aperta", desc: "Matchmaking con altri player in città", emoji: "🌍" },
-          ].map((m) => (
-            <Card
-              key={m.mode}
-              onClick={() => searchQuery.trim() ? goToCity(searchQuery, m.mode) : inputRef.current?.focus()}
-              className="flex items-center gap-4"
-            >
-              <span className="text-2xl">{m.emoji}</span>
-              <div className="flex-1">
-                <h3 className="font-semibold text-sm">{m.title}</h3>
-                <p className="text-xs text-white/50">{m.desc}</p>
-              </div>
-              <ChevronRight size={16} className="text-white/30" />
-            </Card>
-          ))}
-        </div>
+        <Card
+          onClick={() => searchQuery.trim() ? goToCity(searchQuery) : inputRef.current?.focus()}
+          className="flex items-center gap-4"
+        >
+          <span className="text-2xl">🗺️</span>
+          <div className="flex-1">
+            <h3 className="font-semibold text-sm">Pianifica un viaggio</h3>
+            <p className="text-xs text-white/50">Quiz + AI + swipe = itinerario su misura</p>
+          </div>
+          <ChevronRight size={16} className="text-white/30" />
+        </Card>
       </section>
+
+      {/* Itinerari salvati */}
+      {savedItineraries.length > 0 && (
+        <section className="px-4 mb-24">
+          <h2 className="font-display text-lg font-semibold mb-3">I tuoi itinerari</h2>
+          <div className="space-y-2">
+            {savedItineraries.slice(0, 5).map((itin) => (
+              <motion.div
+                key={itin.id}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => router.push(`/pianifica/${encodeURIComponent(itin.city)}/itinerario`)}
+                className="glass rounded-2xl p-4 flex items-center gap-4 cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <MapPin size={18} className="text-primary-light" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm">{itin.city}</h3>
+                  <p className="text-xs text-white/50">
+                    {itin.days} {itin.days === 1 ? "giorno" : "giorni"} · {itin.likedPoisCount} posti
+                    {" · "}
+                    {new Date(itin.createdAt).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
+                  </p>
+                </div>
+                <ChevronRight size={16} className="text-white/30" />
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {savedItineraries.length === 0 && <div className="mb-24" />}
 
       <BottomNav />
     </div>

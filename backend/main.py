@@ -11,6 +11,7 @@ from app.routers.territory import router as territory_router
 from app.routers.quiz import router as quiz_router
 from app.routers.presence import router as presence_router
 from app.routers.game import router as game_router
+from app.routers.trip import router as trip_router
 from app.db import supabase
 
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +40,7 @@ app.include_router(territory_router)
 app.include_router(quiz_router)
 app.include_router(presence_router)
 app.include_router(game_router)
+app.include_router(trip_router)
 
 
 @app.get("/")

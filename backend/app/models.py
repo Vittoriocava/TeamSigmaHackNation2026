@@ -128,3 +128,25 @@ class ConquerRequest(BaseModel):
 class ProfileInferRequest(BaseModel):
     quiz_answers: list[dict] = []
     swipe_batch: list[SwipeRequest] = []
+
+
+class TripProfile(BaseModel):
+    days: int = 2
+    budget: str = "medio"          # economico | medio | comfort | lusso
+    group: str = "solo"            # solo | coppia | famiglia | gruppo
+    interests: list[str] = []
+    pace: str = "medium"           # slow | medium | fast
+    experience_type: str = "mix"   # classico | esploratore | mix
+
+
+class TripPOIsRequest(BaseModel):
+    city: str
+    trip_profile: TripProfile
+    user_profile: UserProfile = Field(default_factory=UserProfile)
+
+
+class TripItineraryRequest(BaseModel):
+    city: str
+    all_pois: list[dict]           # full data for liked POIs
+    trip_profile: TripProfile
+    user_profile: UserProfile = Field(default_factory=UserProfile)

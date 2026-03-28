@@ -8,8 +8,9 @@ from app.models import (POI, BoardStop, CreateGameRequest, GameBoard,
                         QuizQuestion, UserProfile)
 from app.routers.city import (build_overpass_query, enrich_with_wikipedia,
                               fetch_overpass, parse_overpass)
-from app.services.ai import (generate_connection, generate_curiosity,
-                             generate_quiz, generate_story, rank_pois)
+from app.services.ai import (generate_city_pois, generate_connection,
+                             generate_curiosity, generate_quiz, generate_story,
+                             rank_pois)
 from fastapi import APIRouter, Depends, HTTPException
 
 router = APIRouter(prefix="/api/game", tags=["game"])
@@ -39,6 +40,11 @@ STOP_COINS = {
 
 def _slug(city: str) -> str:
     return city.lower().replace(" ", "-").replace("'", "")
+
+
+async def _fetch_and_filter_pois(city: str, profile: UserProfile, budget: str) -> list[dict]:
+    """Generate ranked POIs for a city using the AI service."""
+    return await generate_city_pois(city, profile, budget)
 
 
 async def _generate_stop_content(poi: POI, stype: str, prev_poi: POI | None,
@@ -150,6 +156,12 @@ async def create_game(req: CreateGameRequest,
             pass
 
     return {"game_id": game_id, "board": board.model_dump()}
+
+
+@router.post("/create-demo")
+async def create_game_demo(req: CreateGameRequest):
+    """Create-demo: alias for create without mandatory auth. Used by board/new."""
+    return await create_game(req, user_id=None)
 
 
 @router.get("/{game_id}")

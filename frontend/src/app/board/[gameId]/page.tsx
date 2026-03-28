@@ -14,24 +14,6 @@ import { BottomNav } from "@/components/UI/BottomNav";
 import { useStore } from "@/lib/store";
 import { apiPost } from "@/lib/api";
 import type { MapPOI } from "@/components/Map/GameMap";
-import { BottomNav } from "@/components/UI/BottomNav";
-import { Button } from "@/components/UI/Button";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-    BookOpen,
-    Camera,
-    ChevronDown, ChevronUp,
-    Coins,
-    Eye,
-    HelpCircle,
-    Link2,
-    MapPin,
-    Trophy,
-    Volume2,
-} from "lucide-react";
-import dynamic from "next/dynamic";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
 
 const GameMap = dynamic(
   () => import("@/components/Map/GameMap").then((m) => m.GameMap),
@@ -64,7 +46,7 @@ const LOADING_STEPS = [
 interface GameData {
   id: string;
   city: string;
-  city_slug: string;
+  city_slug?: string;
   mode: string;
   stops: Array<{
     poi: {
@@ -83,7 +65,7 @@ function BoardContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { profile, token } = useStore();
+  const { profile, token, currentGame } = useStore();
 
   const gameId = params.gameId as string;
   const city = searchParams.get("city") || "";
@@ -100,6 +82,31 @@ function BoardContent() {
   const [completedStops, setCompletedStops] = useState<Set<number>>(new Set());
 
   useEffect(() => {
+    // If we have a local game ID (from create-demo), use the board stored in Zustand
+    if (gameId.startsWith("local-")) {
+      if (currentGame && currentGame.id === gameId) {
+        setGame({
+          id: currentGame.id,
+          city: currentGame.city,
+          city_slug: currentGame.citySlug,
+          mode: currentGame.mode,
+          stops: currentGame.stops as GameData["stops"],
+        });
+      } else if (currentGame) {
+        // Different local ID but we have board data — use it anyway
+        setGame({
+          id: gameId,
+          city: currentGame.city || city,
+          city_slug: currentGame.citySlug,
+          mode: currentGame.mode,
+          stops: currentGame.stops as GameData["stops"],
+        });
+      } else {
+        setError("Partita non trovata. Torna alla home e ricomincia.");
+      }
+      return;
+    }
+
     if (gameId !== "new" || !city) return;
 
     const generate = async () => {
@@ -143,7 +150,8 @@ function BoardContent() {
     };
 
     generate();
-  }, [gameId, city, mode, profile, token]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, city, mode, profile, token, currentGame]);
 
   const handleComplete = () => {
     setCompletedStops((prev) => new Set([...prev, currentStop]));
