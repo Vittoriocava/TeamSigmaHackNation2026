@@ -34,6 +34,9 @@ L'AI non è un chatbot. È il **narratore invisibile** che conosce il giocatore 
 - **Wikipedia REST API** + **Wikidata** → fonte dati affidabile e gratuita per i luoghi
 - **Overpass API (OpenStreetMap)** → POI della città (monumenti, botteghe, piazze)
 
+### Audio
+- **ElevenLabs API** → voce generata per micro-storie, curiosità e narrazione delle tappe. Ogni città può avere un narratore con voce e tono diversi (es. voce antica e solenne per Roma, vivace e ironica per Napoli). Supporto multilingua nativo.
+
 ### Infrastruttura
 - **Vercel** → deploy Next.js istantaneo
 - **Railway** o **Render** → deploy FastAPI
@@ -127,6 +130,9 @@ In Modalità Campo, punti la fotocamera verso un edificio o una piazza. L'AR sov
 
 Tecnicamente: AR.js per location-based + Claude Vision API per analizzare la foto scattata e generare contenuto contestuale in tempo reale.
 
+### 8. Narratore Vocale Personalizzato (ElevenLabs)
+Ogni micro-storia e curiosità viene letta da una voce generata da ElevenLabs. Il narratore non è generico: l'AI sceglie tono e registro in base al profilo del giocatore (bambino → voce calda e semplice, esperto → voce colta e densa). La voce del narratore diventa il "personaggio" della partita — la città parla direttamente al giocatore mentre esplora. In Modalità Campo funziona in auricolare mentre si cammina: si sente la storia del luogo senza guardare lo schermo.
+
 ### 7. "Scatta e Scopri" — Vision Challenge
 Il giocatore riceve una sfida: *"Trova e fotografa qualcosa di circolare su questo edificio"*. Scatta la foto, Claude Vision la analizza e conferma se la sfida è completata. Gamification sensoriale reale: non guardi il telefono, guardi la città.
 
@@ -184,6 +190,7 @@ Il giocatore riceve una sfida: *"Trova e fotografa qualcosa di circolare su ques
 │   ├── personalization.py     # filtraggio per profilo
 │   ├── ai_engine.py           # chiamate Claude API (testo + vision)
 │   ├── vision_engine.py       # analisi foto con Claude Vision → conferma sfide
+│   ├── audio_engine.py        # testo → ElevenLabs → audio stream per ogni tappa
 │   └── game_builder.py        # assembla il game object
 └── idea.md
 ```
