@@ -1,8 +1,9 @@
+import json
 from fastapi import APIRouter
 from pydantic import BaseModel
-from ai_engine import analyze_photo, generate_dalle_prompt, get_client, MODEL
-from models import POI
-from supabase_client import supabase
+from app.models import POI
+from app.services.ai import analyze_photo, generate_dalle_prompt, get_client, MODEL
+from app.db import supabase
 
 router = APIRouter(prefix="/api/ai/vision", tags=["vision"])
 
@@ -32,14 +33,12 @@ async def identify_place(req: IdentifyRequest):
     poi = None
     if req.poi_id:
         poi = POI(id=req.poi_id, name=req.poi_name or "", lat=0, lng=0)
-    result = await analyze_photo(req.image_base64, poi)
-    return result
+    return await analyze_photo(req.image_base64, poi)
 
 
 @router.post("/come-era")
 async def come_era(req: ComeEraRequest):
     """'Come era' — retrieve historical overlay for a POI photo."""
-    # Check if we have a cached DALL-E image for this POI + era
     cached = (
         supabase.table("temporal_images")
         .select("*")
@@ -51,17 +50,15 @@ async def come_era(req: ComeEraRequest):
     if cached.data:
         historical_image = cached.data[0]
     else:
-        # Generate on the fly
         poi = POI(id=req.poi_id, name=req.poi_name, lat=0, lng=0)
         dalle_prompt = await generate_dalle_prompt(poi, req.era)
         historical_image = {
             "poi_id": req.poi_id,
             "era_label": req.era,
             "dalle_prompt": dalle_prompt,
-            "image_url": "",  # Would call DALL-E here in production
+            "image_url": "",
         }
 
-    # Analyze the user's photo for alignment
     poi = POI(id=req.poi_id, name=req.poi_name, lat=0, lng=0)
     analysis = await analyze_photo(req.image_base64, poi)
 
@@ -78,7 +75,6 @@ async def come_era(req: ComeEraRequest):
 @router.post("/souvenir")
 async def souvenir(req: SouvenirRequest):
     """'Foto col Monumento' — generate historical souvenir composite."""
-    # Analyze selfie to identify subject position
     client = get_client()
     response = client.messages.create(
         model=MODEL,
@@ -100,7 +96,7 @@ Identifica:
 3. La prospettiva
 
 Poi genera un prompt DALL-E 3 per ricreare lo sfondo storico di {req.poi_name} nell'antichità,
-mantenendo la stessa prospettiva e lasciando spazio per il soggetto umano nella posizione identificata.
+mantenendo la stessa prospettiva e lasciando spazio per il soggetto umano.
 
 Rispondi con JSON:
 {{
@@ -116,7 +112,6 @@ Rispondi con JSON:
         ],
     )
 
-    import json
     text = response.content[0].text
     start = text.find("{")
     end = text.rfind("}") + 1

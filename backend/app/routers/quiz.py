@@ -1,11 +1,10 @@
 import random
 import string
 from fastapi import APIRouter, Depends, HTTPException
-from models import POI, UserProfile, QuizQuestion, QuizAnswer
-from auth import get_current_user
-from ai_engine import generate_quiz, question_hash
-from coin_engine import award_coins
-from supabase_client import supabase
+from app.models import POI, UserProfile, QuizAnswer
+from app.auth import get_current_user
+from app.services.ai import generate_quiz, question_hash
+from app.db import supabase
 
 router = APIRouter(prefix="/api/quiz", tags=["quiz"])
 
@@ -24,7 +23,6 @@ async def create_session(city: str, user_id: str = Depends(get_current_user)):
         "host_user_id": user_id,
     }).execute()
 
-    # Host auto-joins
     supabase.table("quiz_session_players").insert({
         "session_id": result.data[0]["id"],
         "user_id": user_id,
@@ -48,7 +46,6 @@ async def join_session(room_code: str, user_id: str = Depends(get_current_user))
     if session.data["status"] != "waiting":
         raise HTTPException(status_code=400, detail="Sessione già iniziata")
 
-    # Check max players
     players = (
         supabase.table("quiz_session_players")
         .select("id")
@@ -96,7 +93,6 @@ async def start_session(room_code: str, user_id: str = Depends(get_current_user)
     if session.data["host_user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Solo l'host può avviare")
 
-    # Generate 10 questions about the city
     profile = UserProfile(language="it", cultural_level="casual")
     city_poi = POI(
         id=f"city_{session.data['city']}",
@@ -112,10 +108,7 @@ async def start_session(room_code: str, user_id: str = Depends(get_current_user)
         q = await generate_quiz(city_poi, profile, difficulty, [qq.question for qq in questions])
         questions.append(q)
 
-    # Update session status and store questions
-    supabase.table("quiz_sessions").update({
-        "status": "active",
-    }).eq("id", session.data["id"]).execute()
+    supabase.table("quiz_sessions").update({"status": "active"}).eq("id", session.data["id"]).execute()
 
     return {
         "status": "started",
@@ -124,11 +117,7 @@ async def start_session(room_code: str, user_id: str = Depends(get_current_user)
 
 
 @router.post("/session/{room_code}/answer")
-async def submit_answer(
-    room_code: str,
-    answer: QuizAnswer,
-    user_id: str = Depends(get_current_user),
-):
+async def submit_answer(room_code: str, answer: QuizAnswer, user_id: str = Depends(get_current_user)):
     """Submit an answer to a quiz question."""
     session = (
         supabase.table("quiz_sessions")
@@ -140,26 +129,26 @@ async def submit_answer(
     if not session.data:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
 
-    # Record the result
     supabase.table("quiz_results").insert({
         "user_id": user_id,
         "poi_id": f"city_{session.data['city']}",
         "question_hash": answer.question_hash,
-        "correct": answer.answer_index >= 0,  # Will be validated client-side
+        "correct": answer.answer_index >= 0,
         "time_ms": answer.time_ms,
     }).execute()
 
-    # Update player score
     if answer.answer_index >= 0:
         points = max(10, 100 - answer.time_ms // 100)
-        supabase.table("quiz_session_players").update({
-            "score": supabase.table("quiz_session_players")
+        player = (
+            supabase.table("quiz_session_players")
             .select("score")
             .eq("session_id", session.data["id"])
             .eq("user_id", user_id)
             .single()
             .execute()
-            .data["score"] + points,
+        )
+        supabase.table("quiz_session_players").update({
+            "score": player.data["score"] + points,
         }).eq("session_id", session.data["id"]).eq("user_id", user_id).execute()
 
     return {"status": "recorded"}
@@ -167,14 +156,8 @@ async def submit_answer(
 
 @router.post("/poi/{poi_id}/generate")
 async def generate_poi_quiz(poi_id: str, poi_name: str, difficulty: str = "medium"):
-    """Generate a single quiz question for a POI (for piece collection or defense)."""
-    poi = POI(id=poi_id, name=poi_name, lat=0, lng=0, category="")
-
-    # Get previous questions for this user+poi to avoid repeats
+    """Generate a single quiz question for a POI."""
+    poi = POI(id=poi_id, name=poi_name, lat=0, lng=0)
     profile = UserProfile(language="it")
     q = await generate_quiz(poi, profile, difficulty)
-
-    return {
-        "question": q.model_dump(),
-        "question_hash": question_hash(q),
-    }
+    return {"question": q.model_dump(), "question_hash": question_hash(q)}

@@ -2,15 +2,16 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from city_generator import router as city_router
-from personalization import router as profile_router
-from image_engine import router as image_router
-from audio_engine import router as audio_router
-from vision_engine import router as vision_router
-from territory_engine import router as territory_router
-from quiz_session import router as quiz_router
-from presence_engine import router as presence_router
-from game_builder import router as game_router
+from app.routers.city import router as city_router
+from app.routers.profile import router as profile_router
+from app.routers.timeline import router as timeline_router
+from app.routers.audio import router as audio_router
+from app.routers.vision import router as vision_router
+from app.routers.territory import router as territory_router
+from app.routers.quiz import router as quiz_router
+from app.routers.presence import router as presence_router
+from app.routers.game import router as game_router
+from app.db import supabase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("playthecity")
@@ -29,10 +30,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include all routers
 app.include_router(city_router)
 app.include_router(profile_router)
-app.include_router(image_router)
+app.include_router(timeline_router)
 app.include_router(audio_router)
 app.include_router(vision_router)
 app.include_router(territory_router)
@@ -56,10 +56,6 @@ async def startup():
     logger.info("🏙️ Play The City API running — HackNation 2026")
 
 
-# Leaderboard endpoint (global)
-from supabase_client import supabase
-
-
 @app.get("/api/leaderboard")
 async def get_leaderboard(limit: int = 50):
     """Get global leaderboard."""
@@ -67,7 +63,6 @@ async def get_leaderboard(limit: int = 50):
         result = supabase.from_("leaderboard").select("*").order("rank_score", desc=True).limit(limit).execute()
         return {"leaderboard": result.data}
     except Exception:
-        # Fallback if materialized view doesn't exist yet
         result = (
             supabase.table("users")
             .select("id, display_name, avatar_url, level, xp")

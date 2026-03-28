@@ -1,13 +1,16 @@
 import json
 import random
 from fastapi import APIRouter, Depends, HTTPException
-from models import (
+from app.models import (
     CreateGameRequest, GameBoard, BoardStop, POI, UserProfile, QuizQuestion,
 )
-from auth import get_current_user
-from ai_engine import generate_quiz, generate_story, generate_curiosity, generate_connection
-from coin_engine import award_coins
-from supabase_client import supabase
+from app.auth import get_current_user
+from app.services.ai import generate_quiz, generate_story, generate_curiosity, generate_connection, rank_pois
+from app.services.coins import award_coins
+from app.db import supabase
+from app.routers.city import build_overpass_query, parse_overpass, enrich_with_wikipedia
+
+import httpx
 
 router = APIRouter(prefix="/api/game", tags=["game"])
 
@@ -23,23 +26,18 @@ def _slug(city: str) -> str:
 @router.post("/create")
 async def create_game(req: CreateGameRequest, user_id: str = Depends(get_current_user)):
     """Create a complete game board for a city. Orchestrates all AI agents."""
-    import httpx
-
     city_slug = _slug(req.city)
 
-    # Step 1: Fetch and rank POIs via city_generator
-    from city_generator import _build_overpass_query, _parse_overpass, _enrich_with_wikipedia
-    from ai_engine import rank_pois
-
-    query = _build_overpass_query(req.city)
+    # Step 1: Fetch and rank POIs via city router helpers
+    query = build_overpass_query(req.city)
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post("https://overpass-api.de/api/interpreter", data={"data": query})
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail="Errore caricamento POI città")
         data = resp.json()
 
-    raw_pois = _parse_overpass(data)
-    raw_pois = await _enrich_with_wikipedia(raw_pois)
+    raw_pois = parse_overpass(data)
+    raw_pois = await enrich_with_wikipedia(raw_pois)
 
     if len(raw_pois) < 3:
         raise HTTPException(status_code=404, detail=f"Troppo pochi POI per {req.city}")
@@ -137,7 +135,6 @@ async def get_game(game_id: str):
 @router.post("/{game_id}/complete-stop/{poi_id}")
 async def complete_stop(game_id: str, poi_id: str, user_id: str = Depends(get_current_user)):
     """Mark a stop as completed. Award XP and coins."""
-    # Get game
     game = supabase.table("games").select("board_json").eq("id", game_id).single().execute()
     if not game.data:
         raise HTTPException(status_code=404, detail="Partita non trovata")
@@ -180,7 +177,6 @@ async def complete_stop(game_id: str, poi_id: str, user_id: str = Depends(get_cu
     coins = STOP_COINS.get(stop_type, 5)
     balance = await award_coins(user_id, coins, f"tappa_{stop_type}", poi_id)
 
-    # Award XP to user
     xp = STOP_XP.get(stop_type, 10)
 
     return {

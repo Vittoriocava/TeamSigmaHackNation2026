@@ -37,15 +37,31 @@ uvicorn main:app --reload         # dev server (localhost:8000)
 
 ## Key Files
 
-### Backend engines (5 AI agents from AI_AGENT.md)
-- `backend/city_generator.py` — Agent 1: POI Generator (OSM + Wikipedia + Claude ranking)
-- `backend/game_builder.py` — Agent 2: Itinerary + Board Generator
-- `backend/audio_engine.py` — Agent 3: Audio/Voice Guide (Claude + ElevenLabs)
-- `backend/vision_engine.py` — Agent 4: Vision AR (Claude Vision + DALL-E)
-- `backend/quiz_session.py` — Agent 5: Quiz Agent (multiplayer + solo)
-- `backend/ai_engine.py` — Core AI module (Claude API wrapper for all agents)
-- `backend/territory_engine.py` — Territory conquest, decay, defense
-- `backend/image_engine.py` — Timeline images (Claude prompt → DALL-E 3 → cache)
+### Backend structure
+```
+backend/
+├── main.py                    # FastAPI app entry point
+├── run.py                     # uvicorn launcher
+├── requirements.txt
+└── app/
+    ├── config.py              # Settings (API keys via .env)
+    ├── db.py                  # Supabase client
+    ├── auth.py                # JWT auth dependency
+    ├── models.py              # Pydantic models
+    ├── routers/
+    │   ├── city.py            # Agent 1: POI Generator (OSM + Wikipedia)
+    │   ├── game.py            # Agent 2: Itinerary + Board Generator
+    │   ├── audio.py           # Agent 3: Audio/Voice Guide (ElevenLabs)
+    │   ├── vision.py          # Agent 4: Vision AR (Claude Vision + DALL-E)
+    │   ├── quiz.py            # Agent 5: Quiz Agent (multiplayer + solo)
+    │   ├── territory.py       # Territory conquest, decay, defense
+    │   ├── timeline.py        # Timeline images (Claude → DALL-E 3)
+    │   ├── profile.py         # User profile + personalization
+    │   └── presence.py        # Realtime presence
+    └── services/
+        ├── ai.py              # Core Claude API wrapper (all AI functions)
+        └── coins.py           # Coin economy (award, spend, balance)
+```
 
 ### Frontend pages
 - `frontend/src/app/page.tsx` — Home: "Dove andiamo?" + quick actions

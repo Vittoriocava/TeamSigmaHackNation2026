@@ -1,18 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
-from auth import get_current_user
-from supabase_client import supabase
+from app.auth import get_current_user
+from app.db import supabase
 
 router = APIRouter(prefix="/api/presence", tags=["presence"])
 
 
 @router.post("/update")
-async def update_presence(
-    city_slug: str,
-    lat: float,
-    lng: float,
-    user_id: str = Depends(get_current_user),
-):
+async def update_presence(city_slug: str, lat: float, lng: float, user_id: str = Depends(get_current_user)):
     """Update user's position and city for realtime presence."""
     supabase.table("presence").upsert({
         "user_id": user_id,
@@ -21,13 +16,12 @@ async def update_presence(
         "lng": lng,
         "last_seen": datetime.now(timezone.utc).isoformat(),
     }, on_conflict="user_id").execute()
-
     return {"status": "ok"}
 
 
 @router.get("/city/{city_slug}")
 async def get_city_presence(city_slug: str):
-    """Get count and positions of active players in a city (last 5 min)."""
+    """Get active players in a city (last 5 min)."""
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
     result = (
         supabase.table("presence")
@@ -36,12 +30,7 @@ async def get_city_presence(city_slug: str):
         .gt("last_seen", cutoff)
         .execute()
     )
-
-    return {
-        "city": city_slug,
-        "active_players": len(result.data),
-        "positions": result.data,
-    }
+    return {"city": city_slug, "active_players": len(result.data), "positions": result.data}
 
 
 @router.delete("/leave")

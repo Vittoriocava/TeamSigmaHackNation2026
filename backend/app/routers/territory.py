@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from models import ConquerRequest
-from auth import get_current_user
-from coin_engine import award_coins
-from supabase_client import supabase
+from app.models import ConquerRequest
+from app.auth import get_current_user
+from app.services.coins import award_coins
+from app.db import supabase
 
 router = APIRouter(prefix="/api/territory", tags=["territory"])
 
@@ -15,7 +15,6 @@ DECAY_DAYS = 7
 @router.post("/conquer")
 async def conquer_territory(req: ConquerRequest, user_id: str = Depends(get_current_user)):
     """Conquer a POI after GPS verification."""
-    # Check if POI is already owned
     existing = (
         supabase.table("territories")
         .select("*")
@@ -28,11 +27,7 @@ async def conquer_territory(req: ConquerRequest, user_id: str = Depends(get_curr
         owner = existing.data[0]
         if owner["user_id"] == user_id:
             raise HTTPException(status_code=400, detail="Possiedi già questo territorio")
-        # Deactivate previous owner
-        supabase.table("territories").update({
-            "active": False,
-        }).eq("id", owner["id"]).execute()
-        # Record in history
+        supabase.table("territories").update({"active": False}).eq("id", owner["id"]).execute()
         supabase.table("territory_history").insert({
             "poi_id": req.poi_id,
             "user_id": owner["user_id"],
@@ -41,14 +36,12 @@ async def conquer_territory(req: ConquerRequest, user_id: str = Depends(get_curr
             "to_date": datetime.now(timezone.utc).isoformat(),
         }).execute()
 
-    # Create new territory
     territory = supabase.table("territories").insert({
         "user_id": user_id,
         "poi_id": req.poi_id,
         "city_slug": req.city_slug,
     }).execute()
 
-    # Check if user had pre-claimed (3 pieces)
     pieces = (
         supabase.table("poi_pieces")
         .select("pieces_collected")
@@ -56,16 +49,10 @@ async def conquer_territory(req: ConquerRequest, user_id: str = Depends(get_curr
         .eq("poi_id", req.poi_id)
         .execute()
     )
-    bonus = 0
-    if pieces.data and pieces.data[0]["pieces_collected"] >= 3:
-        bonus = 30  # Bonus for pre-claim
+    bonus = 30 if pieces.data and pieces.data[0]["pieces_collected"] >= 3 else 0
 
-    # Award coins
     total = CONQUEST_COINS + bonus
     balance = await award_coins(user_id, total, "conquista_territorio", req.poi_id)
-
-    # Award XP
-    supabase.rpc("increment_xp", {"uid": user_id, "amount": 25}).execute()
 
     return {
         "status": "conquered",
@@ -78,7 +65,7 @@ async def conquer_territory(req: ConquerRequest, user_id: str = Depends(get_curr
 
 @router.post("/defend")
 async def defend_territory(poi_id: str, user_id: str = Depends(get_current_user)):
-    """Defend a territory by completing a quiz (called after quiz success)."""
+    """Defend a territory by completing a quiz."""
     territory = (
         supabase.table("territories")
         .select("*")
@@ -137,7 +124,7 @@ async def get_poi_owner(poi_id: str):
 
 @router.get("/city/{city_slug}")
 async def get_city_territories(city_slug: str):
-    """Get all active territories in a city (for map coloring)."""
+    """Get all active territories in a city."""
     result = (
         supabase.table("territories")
         .select("poi_id, user_id, tier, weeks_held, conquered_at, last_defended_at")

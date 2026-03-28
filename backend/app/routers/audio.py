@@ -1,15 +1,15 @@
+import base64
 import httpx
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from config import get_settings
-from models import NarrationRequest, UserProfile
-from ai_engine import get_client, MODEL
+from app.config import get_settings
+from app.models import NarrationRequest
+from app.services.ai import get_client, MODEL
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 
 
 def _narration_prompt(req: NarrationRequest) -> str:
-    """Build the narration prompt based on mode."""
     langs = {"it": "italiano", "en": "English", "fr": "français", "es": "español"}
     lang = langs.get(req.user_profile.language, "italiano")
 
@@ -34,7 +34,6 @@ Non iniziare MAI con il nome del posto. Sii coinvolgente, evocativo, mai scolast
 
 
 async def _generate_narration_text(req: NarrationRequest) -> str:
-    """Generate narration text using Claude."""
     client = get_client()
     response = client.messages.create(
         model=MODEL,
@@ -46,11 +45,10 @@ async def _generate_narration_text(req: NarrationRequest) -> str:
 
 @router.post("/narrate")
 async def narrate(req: NarrationRequest):
-    """Generate narration text + ElevenLabs audio URL."""
+    """Generate narration text + ElevenLabs audio."""
     text = await _generate_narration_text(req)
     settings = get_settings()
 
-    # Generate audio via ElevenLabs
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{settings.elevenlabs_voice_id}",
@@ -66,8 +64,6 @@ async def narrate(req: NarrationRequest):
         )
 
     if resp.status_code == 200:
-        # Return audio as base64 for simple integration
-        import base64
         audio_b64 = base64.b64encode(resp.content).decode()
         return {"text": text, "audio_base64": audio_b64, "format": "audio/mpeg"}
 

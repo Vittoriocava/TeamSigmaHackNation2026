@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from openai import OpenAI
-from config import get_settings
-from models import POI, TimelineImage
-from ai_engine import generate_dalle_prompt
-from supabase_client import supabase
+from app.config import get_settings
+from app.models import POI
+from app.services.ai import generate_dalle_prompt
+from app.db import supabase
 
 router = APIRouter(prefix="/api/ai/timeline", tags=["timeline"])
 
@@ -29,7 +29,6 @@ async def get_timeline_images(poi_id: str):
 @router.post("/{poi_id}")
 async def generate_timeline_images(poi_id: str, poi_name: str, poi_description: str = ""):
     """Generate timeline images for a POI across historical eras."""
-    # Check cache first
     cached = supabase.table("temporal_images").select("*").eq("poi_id", poi_id).execute()
     if cached.data and len(cached.data) >= len(ERAS):
         return {"poi_id": poi_id, "images": cached.data, "from_cache": True}
@@ -43,7 +42,6 @@ async def generate_timeline_images(poi_id: str, poi_name: str, poi_description: 
         if era_label in cached_eras:
             continue
 
-        # Claude generates the prompt, DALL-E generates the image
         dalle_prompt = await generate_dalle_prompt(poi, era_label)
 
         try:
@@ -56,7 +54,6 @@ async def generate_timeline_images(poi_id: str, poi_name: str, poi_description: 
             )
             image_url = response.data[0].url
 
-            # Cache in Supabase
             record = {
                 "poi_id": poi_id,
                 "era_label": era_label,
@@ -66,7 +63,6 @@ async def generate_timeline_images(poi_id: str, poi_name: str, poi_description: 
             supabase.table("temporal_images").upsert(record, on_conflict="poi_id,era_label").execute()
             images.append(record)
         except Exception as e:
-            # Continue with other eras if one fails
             images.append({
                 "poi_id": poi_id,
                 "era_label": era_label,
