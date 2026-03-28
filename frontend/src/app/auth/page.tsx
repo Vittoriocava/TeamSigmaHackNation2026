@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/UI/Button";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -24,30 +24,47 @@ export default function AuthPage() {
 
     try {
       if (mode === "register") {
-        const { data, error: err } = await supabase.auth.signUp({
+        // First create auth user
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { display_name: displayName } },
+          options: { 
+            data: { display_name: displayName },
+            emailRedirectTo: `${window.location.origin}/auth?mode=login`
+          },
         });
-        if (err) throw err;
-        if (data.user && data.session) {
-          setUser({
-            id: data.user.id,
-            email: data.user.email || "",
-            displayName: displayName,
-            avatarUrl: "",
-            level: 1,
-            xp: 0,
-          });
-          setToken(data.session.access_token);
-          router.push("/onboarding");
+        if (authErr) throw authErr;
+        
+        if (!authData.user) throw new Error("Signup failed");
+        
+        // Handle email confirmation requirement
+        if (!authData.session) {
+          setError("Controlla la tua email per confermare l'account");
+          return;
         }
+        
+        // User created successfully
+        setUser({
+          id: authData.user.id,
+          email: authData.user.email || "",
+          displayName: displayName,
+          avatarUrl: "",
+          level: 1,
+          xp: 0,
+        });
+        setToken(authData.session.access_token);
+        router.push("/onboarding");
       } else {
         const { data, error: err } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        if (err) throw err;
+        if (err) {
+          if (err.message.includes("Invalid login credentials")) {
+            throw new Error("Email o password non corretti");
+          }
+          throw err;
+        }
         if (data.user && data.session) {
           setUser({
             id: data.user.id,
@@ -62,7 +79,9 @@ export default function AuthPage() {
         }
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Errore di autenticazione");
+      const message = err instanceof Error ? err.message : "Errore di autenticazione";
+      setError(message);
+      console.error("Auth error:", message);
     } finally {
       setLoading(false);
     }
