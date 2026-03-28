@@ -1,10 +1,12 @@
 import json
 import hashlib
 from anthropic import Anthropic
-from config import get_settings
-from models import POI, UserProfile, QuizQuestion
+from app.config import get_settings
+from app.models import POI, UserProfile, QuizQuestion
 
 _client = None
+
+MODEL = "claude-sonnet-4-20250514"
 
 
 def get_client() -> Anthropic:
@@ -12,9 +14,6 @@ def get_client() -> Anthropic:
     if _client is None:
         _client = Anthropic(api_key=get_settings().claude_api_key)
     return _client
-
-
-MODEL = "claude-sonnet-4-20250514"
 
 
 def _lang(profile: UserProfile) -> str:
@@ -28,7 +27,6 @@ async def generate_quiz(
     difficulty: str = "medium",
     previous_questions: list[str] | None = None,
 ) -> QuizQuestion:
-    """Generate a contextual quiz question about a POI."""
     prev = "\n".join(previous_questions or [])
     prompt = f"""Genera UNA domanda quiz sul luogo "{poi.name}" ({poi.category}).
 Descrizione: {poi.description}
@@ -54,7 +52,6 @@ Rispondi SOLO con JSON valido:
         messages=[{"role": "user", "content": prompt}],
     )
     text = response.content[0].text
-    # Extract JSON from response
     start = text.find("{")
     end = text.rfind("}") + 1
     data = json.loads(text[start:end])
@@ -64,7 +61,6 @@ Rispondi SOLO con JSON valido:
 
 
 async def generate_story(poi: POI, profile: UserProfile, city: str) -> str:
-    """Generate a micro-story narrative for a POI."""
     prompt = f"""Sei il narratore di Play The City. Genera una micro-storia coinvolgente per:
 Luogo: {poi.name} a {city}
 Descrizione: {poi.description}
@@ -90,7 +86,6 @@ Regole:
 
 
 async def generate_curiosity(poi: POI, profile: UserProfile) -> str:
-    """Generate a hidden curiosity about a POI."""
     prompt = f"""Genera una curiosità nascosta e sorprendente su "{poi.name}".
 Qualcosa che il 95% dei visitatori non sa.
 Descrizione: {poi.description}
@@ -109,7 +104,6 @@ Max 80 parole. Tono: "lo sapevi che...?" coinvolgente."""
 
 
 async def generate_connection(poi1: POI, poi2: POI, profile: UserProfile) -> str:
-    """Generate a narrative connection between two POIs."""
     prompt = f"""Trova e racconta una connessione nascosta tra questi due luoghi:
 1. {poi1.name}: {poi1.description}
 2. {poi2.name}: {poi2.description}
@@ -128,7 +122,6 @@ Max 100 parole. Tono narrativo, come se stessi svelando un segreto."""
 
 
 async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
-    """Claude Vision analyzes a photo for AR/challenge verification."""
     system = "Sei l'agente visivo di Play The City. Analizza foto di luoghi e monumenti."
     prompt = "Identifica il luogo in questa foto. Rispondi con JSON: {\"identified\": true/false, \"place_name\": \"...\", \"confidence\": 0.0-1.0, \"description\": \"breve descrizione di cosa vedi\", \"perspective\": \"frontale/laterale/aerea/altro\"}"
     if poi:
@@ -156,7 +149,6 @@ async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
 
 
 async def generate_dalle_prompt(poi: POI, era: str) -> str:
-    """Generate a DALL-E prompt for historical reconstruction of a POI."""
     prompt = f"""Genera un prompt per DALL-E 3 che ricostruisca "{poi.name}" nell'epoca "{era}".
 Il prompt deve produrre un'immagine fotorealistica, prospettiva frontale, luce naturale.
 Includi dettagli storici accurati: architettura, persone, vestiti, atmosfera dell'epoca.
@@ -174,7 +166,6 @@ Rispondi SOLO con il prompt in inglese, nient'altro. Max 200 parole."""
 async def rank_pois(
     pois: list[dict], profile: UserProfile, city: str, budget: str = "medio"
 ) -> list[dict]:
-    """Claude ranks and enriches a list of raw POIs based on user profile."""
     prompt = f"""Sei il motore di personalizzazione di Play The City.
 Città: {city}
 Profilo: interessi={profile.interests}, livello={profile.cultural_level}, età={profile.age_range}, budget={budget}
@@ -208,7 +199,6 @@ Ordina per relevance_score decrescente."""
 
 
 async def infer_profile(quiz_answers: list[dict], swipe_batch: list[dict]) -> dict:
-    """Infer user profile from quiz answers and swipe history."""
     prompt = f"""Analizza queste risposte e preferenze per dedurre il profilo utente.
 
 Risposte quiz onboarding: {json.dumps(quiz_answers, ensure_ascii=False)}

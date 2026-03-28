@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from models import UserProfile, ProfileInferRequest
-from ai_engine import infer_profile
-from supabase_client import supabase
+from app.models import UserProfile, ProfileInferRequest
+from app.services.ai import infer_profile
+from app.db import supabase
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 

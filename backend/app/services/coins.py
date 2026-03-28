@@ -1,9 +1,8 @@
-from supabase_client import supabase
+from app.db import supabase
 
 
-async def award_coins(user_id: str, amount: int, reason: str, ref_id: str | None = None):
+async def award_coins(user_id: str, amount: int, reason: str, ref_id: str | None = None) -> int:
     """Add coins to user balance and record transaction."""
-    # Update balance
     current = supabase.table("coins").select("balance, lifetime_earned").eq("user_id", user_id).single().execute()
     new_balance = current.data["balance"] + amount
     new_lifetime = current.data["lifetime_earned"] + amount
@@ -12,7 +11,6 @@ async def award_coins(user_id: str, amount: int, reason: str, ref_id: str | None
         "lifetime_earned": new_lifetime,
     }).eq("user_id", user_id).execute()
 
-    # Record transaction
     supabase.table("coin_transactions").insert({
         "user_id": user_id,
         "amount": amount,
@@ -24,7 +22,7 @@ async def award_coins(user_id: str, amount: int, reason: str, ref_id: str | None
 
 
 async def spend_coins(user_id: str, amount: int, reason: str, ref_id: str | None = None) -> int:
-    """Deduct coins from user balance. Returns new balance. Raises if insufficient."""
+    """Deduct coins from user balance. Raises ValueError if insufficient."""
     current = supabase.table("coins").select("balance").eq("user_id", user_id).single().execute()
     if current.data["balance"] < amount:
         raise ValueError("Monete insufficienti")

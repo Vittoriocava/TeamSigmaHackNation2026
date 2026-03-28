@@ -1,8 +1,7 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
-from models import POI, UserProfile
-from auth import get_current_user
-from ai_engine import rank_pois
+from fastapi import APIRouter, HTTPException
+from app.models import UserProfile
+from app.services.ai import rank_pois
 
 router = APIRouter(prefix="/api/city", tags=["city"])
 
@@ -10,8 +9,7 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 WIKIPEDIA_API = "https://it.wikipedia.org/api/rest_v1/page/summary"
 
 
-def _build_overpass_query(city: str) -> str:
-    """Build Overpass QL to fetch tourist-relevant POIs in a city."""
+def build_overpass_query(city: str) -> str:
     return f"""
 [out:json][timeout:30];
 area["name"="{city}"]["admin_level"~"^[4-8]$"]->.searchArea;
@@ -26,8 +24,7 @@ out center 100;
 """
 
 
-def _parse_overpass(data: dict) -> list[dict]:
-    """Parse Overpass response into raw POI dicts."""
+def parse_overpass(data: dict) -> list[dict]:
     pois = []
     for el in data.get("elements", []):
         tags = el.get("tags", {})
@@ -68,10 +65,9 @@ def _parse_overpass(data: dict) -> list[dict]:
     return pois
 
 
-async def _enrich_with_wikipedia(pois: list[dict]) -> list[dict]:
-    """Enrich POIs with Wikipedia summaries."""
+async def enrich_with_wikipedia(pois: list[dict]) -> list[dict]:
     async with httpx.AsyncClient(timeout=10) as client:
-        for poi in pois[:30]:  # Limit to avoid rate limits
+        for poi in pois[:30]:
             wiki_url = poi.get("wikipedia_url", "")
             if not wiki_url:
                 continue
@@ -91,35 +87,30 @@ async def _enrich_with_wikipedia(pois: list[dict]) -> list[dict]:
 @router.get("/{city_name}/pois")
 async def get_city_pois(city_name: str):
     """Fetch raw POIs from OSM for a city."""
-    query = _build_overpass_query(city_name)
+    query = build_overpass_query(city_name)
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(OVERPASS_URL, data={"data": query})
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail="Errore Overpass API")
         data = resp.json()
 
-    pois = _parse_overpass(data)
-    pois = await _enrich_with_wikipedia(pois)
+    pois = parse_overpass(data)
+    pois = await enrich_with_wikipedia(pois)
     return {"city": city_name, "count": len(pois), "pois": pois}
 
 
 @router.post("/{city_name}/rank")
-async def rank_city_pois(
-    city_name: str,
-    profile: UserProfile,
-    budget: str = "medio",
-):
+async def rank_city_pois(city_name: str, profile: UserProfile, budget: str = "medio"):
     """Rank POIs using Claude AI based on user profile."""
-    # First get raw POIs
-    query = _build_overpass_query(city_name)
+    query = build_overpass_query(city_name)
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(OVERPASS_URL, data={"data": query})
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail="Errore Overpass API")
         data = resp.json()
 
-    pois = _parse_overpass(data)
-    pois = await _enrich_with_wikipedia(pois)
+    pois = parse_overpass(data)
+    pois = await enrich_with_wikipedia(pois)
 
     if not pois:
         raise HTTPException(status_code=404, detail=f"Nessun POI trovato per {city_name}")

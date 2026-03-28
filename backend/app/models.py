@@ -47,7 +47,7 @@ class ItineraryDay(BaseModel):
 
 class BoardStop(BaseModel):
     poi: POI
-    type: str = "quiz"  # story, quiz, challenge, curiosity, connection, ar, geoguessr
+    type: str = "quiz"
     content: dict = {}
     completed: bool = False
 
@@ -86,7 +86,7 @@ class NarrationRequest(BaseModel):
     poi_id: str
     poi_name: str
     city: str
-    mode: str = "on_demand"  # on_demand, proximity, radar
+    mode: str = "on_demand"
     wikipedia_excerpt: str = ""
     wikidata_facts: str = ""
     user_profile: UserProfile = Field(default_factory=UserProfile)

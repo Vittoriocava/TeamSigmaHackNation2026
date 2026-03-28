@@ -1,6 +1,6 @@
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from jose import jwt, JWTError
-from config import get_settings
+from app.config import get_settings
 
 
 def get_token_from_header(request: Request) -> str:
@@ -29,6 +29,6 @@ def verify_token(token: str) -> str:
 
 
 def get_current_user(request: Request) -> str:
-    """FastAPI dependency that extracts and verifies user_id from JWT."""
+    """FastAPI dependency — extracts and verifies user_id from JWT."""
     token = get_token_from_header(request)
     return verify_token(token)

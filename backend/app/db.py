@@ -1,5 +1,5 @@
 from supabase import create_client, Client
-from config import get_settings
+from app.config import get_settings
 
 _client: Client | None = None
 
@@ -17,8 +17,9 @@ def get_supabase() -> Client:
     return _client
 
 
-# Lazy property — modules import `supabase` but it's resolved at first use
 class _LazySupabase:
+    """Lazy proxy — resolves Supabase client at first attribute access."""
+
     def __getattr__(self, name: str):
         return getattr(get_supabase(), name)
 
