@@ -7,8 +7,8 @@ router = APIRouter(prefix="/api/city", tags=["city"])
 
 OVERPASS_MIRRORS = [
     "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
 ]
 WIKIPEDIA_API = "https://it.wikipedia.org/api/rest_v1/page/summary"
 

@@ -185,28 +185,55 @@ Rispondi SOLO con il prompt in inglese, nient'altro. Max 200 parole."""
 async def rank_pois(
     pois: list[dict], profile: UserProfile, city: str, budget: str = "medio"
 ) -> list[dict]:
-    prompt = f"""Sei il motore di personalizzazione di Play The City.
-Città: {city}
-Profilo: interessi={profile.interests}, livello={profile.cultural_level}, età={profile.age_range}, budget={budget}
+    # Send only ids+names to keep the prompt small and the response predictable
+    slim = [{"id": p["id"], "name": p["name"], "category": p.get("category", "")} for p in pois[:40]]
 
-Ricevi una lista di POI grezzi. Per ciascuno assegna:
-- relevance_score (0-10): quanto è adatto a QUESTO profilo
-- why_for_you: frase breve sul perché questo posto è giusto per l'utente
-- hidden_gem: true se poco noto ma di alto valore
-- estimated_cost: "gratuito" / "€" / "€€" / "€€€"
-- crowd_level: "basso" / "medio" / "alto"
+    prompt = f"""OUTPUT MUST BE VALID JSON ONLY. NO PREAMBLE. NO EXPLANATION. START WITH [ AND END WITH ].
 
-Garantisci un mix bilanciato: non solo musei, non solo food.
-Se budget basso, priorità ai posti gratuiti.
+Rank these {len(slim)} places in {city} for a user with:
+- interests: {profile.interests}
+- cultural level: {profile.cultural_level}
+- budget: {budget}
 
-POI da valutare:
-{json.dumps(pois[:40], ensure_ascii=False, indent=2)}
+For each place output a JSON object with EXACTLY these fields:
+"id", "relevance_score" (0-10 float), "why_for_you" (short Italian phrase), "hidden_gem" (boolean), "estimated_cost" ("gratuito"/"€"/"€€"/"€€€"), "crowd_level" ("basso"/"medio"/"alto")
 
-Rispondi SOLO con un JSON array di oggetti con i campi originali + quelli nuovi.
-Ordina per relevance_score decrescente."""
+Places: {json.dumps(slim, ensure_ascii=False)}
 
-    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=4000)
-    return _extract_json_array(text)
+["""
+
+    text = await _chat_async(
+        [{"role": "user", "content": prompt}],
+        max_tokens=2000,
+    )
+    # The model may or may not include the opening [
+    if not text.strip().startswith("["):
+        text = "[" + text
+
+    try:
+        scores: list[dict] = _extract_json_array(text)
+    except Exception:
+        # Fallback: return pois as-is with default scores
+        return [
+            {**p, "relevance_score": 7.0, "why_for_you": "Luogo interessante", "hidden_gem": False, "estimated_cost": "gratuito", "crowd_level": "medio"}
+            for p in pois[:20]
+        ]
+
+    # Merge scores back into full POI data
+    score_map = {s["id"]: s for s in scores if "id" in s}
+    result = []
+    for p in pois:
+        s = score_map.get(p["id"], {})
+        result.append({
+            **p,
+            "relevance_score": s.get("relevance_score", 5.0),
+            "why_for_you": s.get("why_for_you", ""),
+            "hidden_gem": s.get("hidden_gem", False),
+            "estimated_cost": s.get("estimated_cost", "gratuito"),
+            "crowd_level": s.get("crowd_level", "medio"),
+        })
+    result.sort(key=lambda x: x["relevance_score"], reverse=True)
+    return result
 
 
 async def infer_profile(quiz_answers: list[dict], swipe_batch: list[dict]) -> dict:
