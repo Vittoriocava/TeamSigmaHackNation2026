@@ -1,10 +1,11 @@
+import uuid
 import random
 import string
 from fastapi import APIRouter, Depends, HTTPException
 from app.models import POI, UserProfile, QuizAnswer
 from app.auth import get_current_user
 from app.services.ai import generate_quiz, question_hash
-from app.db import supabase
+from app.db import get_db, row_to_dict, rows_to_list
 
 router = APIRouter(prefix="/api/quiz", tags=["quiz"])
 
@@ -17,89 +18,87 @@ def _generate_room_code() -> str:
 async def create_session(city: str, user_id: str = Depends(get_current_user)):
     """Create a multiplayer quiz lobby."""
     room_code = _generate_room_code()
-    result = supabase.table("quiz_sessions").insert({
-        "room_code": room_code,
-        "city": city,
-        "host_user_id": user_id,
-    }).execute()
+    session_id = str(uuid.uuid4())
 
-    supabase.table("quiz_session_players").insert({
-        "session_id": result.data[0]["id"],
-        "user_id": user_id,
-    }).execute()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO quiz_sessions (id, room_code, city, host_user_id) VALUES (?, ?, ?, ?)",
+            (session_id, room_code, city, user_id),
+        )
+        conn.execute(
+            "INSERT INTO quiz_session_players (session_id, user_id) VALUES (?, ?)",
+            (session_id, user_id),
+        )
 
-    return {"session_id": result.data[0]["id"], "room_code": room_code}
+    return {"session_id": session_id, "room_code": room_code}
 
 
 @router.post("/session/{room_code}/join")
 async def join_session(room_code: str, user_id: str = Depends(get_current_user)):
     """Join a quiz lobby."""
-    session = (
-        supabase.table("quiz_sessions")
-        .select("*")
-        .eq("room_code", room_code)
-        .single()
-        .execute()
-    )
-    if not session.data:
-        raise HTTPException(status_code=404, detail="Sessione non trovata")
-    if session.data["status"] != "waiting":
-        raise HTTPException(status_code=400, detail="Sessione già iniziata")
+    with get_db() as conn:
+        session = conn.execute(
+            "SELECT * FROM quiz_sessions WHERE room_code = ?", (room_code,)
+        ).fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sessione non trovata")
+        session = dict(session)
+        if session["status"] != "waiting":
+            raise HTTPException(status_code=400, detail="Sessione già iniziata")
 
-    players = (
-        supabase.table("quiz_session_players")
-        .select("id")
-        .eq("session_id", session.data["id"])
-        .execute()
-    )
-    if len(players.data) >= session.data["max_players"]:
-        raise HTTPException(status_code=400, detail="Sessione piena")
+        player_count = conn.execute(
+            "SELECT COUNT(*) FROM quiz_session_players WHERE session_id = ?", (session["id"],)
+        ).fetchone()[0]
+        if player_count >= session["max_players"]:
+            raise HTTPException(status_code=400, detail="Sessione piena")
 
-    supabase.table("quiz_session_players").insert({
-        "session_id": session.data["id"],
-        "user_id": user_id,
-    }).execute()
+        conn.execute(
+            "INSERT OR IGNORE INTO quiz_session_players (session_id, user_id) VALUES (?, ?)",
+            (session["id"], user_id),
+        )
 
-    return {"status": "joined", "session_id": session.data["id"]}
+    return {"status": "joined", "session_id": session["id"]}
 
 
 @router.get("/session/{room_code}")
 async def get_session(room_code: str):
     """Get session status and players."""
-    session = (
-        supabase.table("quiz_sessions")
-        .select("*, quiz_session_players(user_id, score, coins_earned)")
-        .eq("room_code", room_code)
-        .single()
-        .execute()
-    )
-    if not session.data:
-        raise HTTPException(status_code=404, detail="Sessione non trovata")
-    return session.data
+    with get_db() as conn:
+        session = conn.execute(
+            "SELECT * FROM quiz_sessions WHERE room_code = ?", (room_code,)
+        ).fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sessione non trovata")
+        session = dict(session)
+        players = conn.execute(
+            "SELECT user_id, score, coins_earned FROM quiz_session_players WHERE session_id = ?",
+            (session["id"],),
+        ).fetchall()
+
+    session["quiz_session_players"] = rows_to_list(players)
+    return session
 
 
 @router.post("/session/{room_code}/start")
 async def start_session(room_code: str, user_id: str = Depends(get_current_user)):
     """Host starts the quiz session. Generates questions with Claude."""
-    session = (
-        supabase.table("quiz_sessions")
-        .select("*")
-        .eq("room_code", room_code)
-        .single()
-        .execute()
-    )
-    if not session.data:
-        raise HTTPException(status_code=404, detail="Sessione non trovata")
-    if session.data["host_user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Solo l'host può avviare")
+    with get_db() as conn:
+        session = conn.execute(
+            "SELECT * FROM quiz_sessions WHERE room_code = ?", (room_code,)
+        ).fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sessione non trovata")
+        session = dict(session)
+        if session["host_user_id"] != user_id:
+            raise HTTPException(status_code=403, detail="Solo l'host può avviare")
 
     profile = UserProfile(language="it", cultural_level="casual")
     city_poi = POI(
-        id=f"city_{session.data['city']}",
-        name=session.data["city"],
+        id=f"city_{session['city']}",
+        name=session["city"],
         lat=0, lng=0,
         category="city",
-        description=f"Domande generali sulla città di {session.data['city']}",
+        description=f"Domande generali sulla città di {session['city']}",
     )
 
     questions = []
@@ -108,7 +107,10 @@ async def start_session(room_code: str, user_id: str = Depends(get_current_user)
         q = await generate_quiz(city_poi, profile, difficulty, [qq.question for qq in questions])
         questions.append(q)
 
-    supabase.table("quiz_sessions").update({"status": "active"}).eq("id", session.data["id"]).execute()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE quiz_sessions SET status = 'active' WHERE id = ?", (session["id"],)
+        )
 
     return {
         "status": "started",
@@ -119,37 +121,30 @@ async def start_session(room_code: str, user_id: str = Depends(get_current_user)
 @router.post("/session/{room_code}/answer")
 async def submit_answer(room_code: str, answer: QuizAnswer, user_id: str = Depends(get_current_user)):
     """Submit an answer to a quiz question."""
-    session = (
-        supabase.table("quiz_sessions")
-        .select("id, city")
-        .eq("room_code", room_code)
-        .single()
-        .execute()
-    )
-    if not session.data:
-        raise HTTPException(status_code=404, detail="Sessione non trovata")
+    with get_db() as conn:
+        session = conn.execute(
+            "SELECT id, city FROM quiz_sessions WHERE room_code = ?", (room_code,)
+        ).fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sessione non trovata")
+        session = dict(session)
 
-    supabase.table("quiz_results").insert({
-        "user_id": user_id,
-        "poi_id": f"city_{session.data['city']}",
-        "question_hash": answer.question_hash,
-        "correct": answer.answer_index >= 0,
-        "time_ms": answer.time_ms,
-    }).execute()
-
-    if answer.answer_index >= 0:
-        points = max(10, 100 - answer.time_ms // 100)
-        player = (
-            supabase.table("quiz_session_players")
-            .select("score")
-            .eq("session_id", session.data["id"])
-            .eq("user_id", user_id)
-            .single()
-            .execute()
+        conn.execute(
+            "INSERT INTO quiz_results (user_id, poi_id, question_hash, correct, time_ms) VALUES (?, ?, ?, ?, ?)",
+            (user_id, f"city_{session['city']}", answer.question_hash, 1 if answer.answer_index >= 0 else 0, answer.time_ms),
         )
-        supabase.table("quiz_session_players").update({
-            "score": player.data["score"] + points,
-        }).eq("session_id", session.data["id"]).eq("user_id", user_id).execute()
+
+        if answer.answer_index >= 0:
+            points = max(10, 100 - answer.time_ms // 100)
+            player = conn.execute(
+                "SELECT score FROM quiz_session_players WHERE session_id = ? AND user_id = ?",
+                (session["id"], user_id),
+            ).fetchone()
+            if player:
+                conn.execute(
+                    "UPDATE quiz_session_players SET score = ? WHERE session_id = ? AND user_id = ?",
+                    (player["score"] + points, session["id"], user_id),
+                )
 
     return {"status": "recorded"}
 

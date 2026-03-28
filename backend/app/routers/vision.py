@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from app.models import POI
 from app.services.ai import analyze_photo, generate_dalle_prompt, get_client, _vision_model
-from app.db import supabase
+from app.db import get_db, row_to_dict
 
 router = APIRouter(prefix="/api/ai/vision", tags=["vision"])
 
@@ -39,16 +39,14 @@ async def identify_place(req: IdentifyRequest):
 @router.post("/come-era")
 async def come_era(req: ComeEraRequest):
     """'Come era' — retrieve historical overlay for a POI photo."""
-    cached = (
-        supabase.table("temporal_images")
-        .select("*")
-        .eq("poi_id", req.poi_id)
-        .eq("era_label", req.era)
-        .execute()
-    )
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM temporal_images WHERE poi_id = ? AND era_label = ?",
+            (req.poi_id, req.era),
+        ).fetchone()
 
-    if cached.data:
-        historical_image = cached.data[0]
+    if row:
+        historical_image = row_to_dict(row)
     else:
         poi = POI(id=req.poi_id, name=req.poi_name, lat=0, lng=0)
         dalle_prompt = await generate_dalle_prompt(poi, req.era)

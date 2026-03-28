@@ -1,9 +1,10 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from app.models import ConquerRequest
 from app.auth import get_current_user
 from app.services.coins import award_coins
-from app.db import supabase
+from app.db import get_db, row_to_dict, rows_to_list
 
 router = APIRouter(prefix="/api/territory", tags=["territory"])
 
@@ -15,48 +16,41 @@ DECAY_DAYS = 7
 @router.post("/conquer")
 async def conquer_territory(req: ConquerRequest, user_id: str = Depends(get_current_user)):
     """Conquer a POI after GPS verification."""
-    existing = (
-        supabase.table("territories")
-        .select("*")
-        .eq("poi_id", req.poi_id)
-        .eq("active", True)
-        .execute()
-    )
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT * FROM territories WHERE poi_id = ? AND active = 1",
+            (req.poi_id,),
+        ).fetchone()
 
-    if existing.data:
-        owner = existing.data[0]
-        if owner["user_id"] == user_id:
-            raise HTTPException(status_code=400, detail="Possiedi già questo territorio")
-        supabase.table("territories").update({"active": False}).eq("id", owner["id"]).execute()
-        supabase.table("territory_history").insert({
-            "poi_id": req.poi_id,
-            "user_id": owner["user_id"],
-            "city_slug": req.city_slug,
-            "from_date": owner["conquered_at"],
-            "to_date": datetime.now(timezone.utc).isoformat(),
-        }).execute()
+        if existing:
+            owner = dict(existing)
+            if owner["user_id"] == user_id:
+                raise HTTPException(status_code=400, detail="Possiedi già questo territorio")
+            conn.execute("UPDATE territories SET active = 0 WHERE id = ?", (owner["id"],))
+            conn.execute(
+                "INSERT INTO territory_history (poi_id, user_id, city_slug, from_date, to_date) VALUES (?, ?, ?, ?, ?)",
+                (req.poi_id, owner["user_id"], req.city_slug, owner["conquered_at"], datetime.now(timezone.utc).isoformat()),
+            )
 
-    territory = supabase.table("territories").insert({
-        "user_id": user_id,
-        "poi_id": req.poi_id,
-        "city_slug": req.city_slug,
-    }).execute()
+        territory_id = str(uuid.uuid4())
+        conn.execute(
+            "INSERT INTO territories (id, user_id, poi_id, city_slug) VALUES (?, ?, ?, ?)",
+            (territory_id, user_id, req.poi_id, req.city_slug),
+        )
+        territory = conn.execute("SELECT * FROM territories WHERE id = ?", (territory_id,)).fetchone()
 
-    pieces = (
-        supabase.table("poi_pieces")
-        .select("pieces_collected")
-        .eq("user_id", user_id)
-        .eq("poi_id", req.poi_id)
-        .execute()
-    )
-    bonus = 30 if pieces.data and pieces.data[0]["pieces_collected"] >= 3 else 0
+        pieces = conn.execute(
+            "SELECT pieces_collected FROM poi_pieces WHERE user_id = ? AND poi_id = ?",
+            (user_id, req.poi_id),
+        ).fetchone()
 
+    bonus = 30 if pieces and pieces["pieces_collected"] >= 3 else 0
     total = CONQUEST_COINS + bonus
     balance = await award_coins(user_id, total, "conquista_territorio", req.poi_id)
 
     return {
         "status": "conquered",
-        "territory": territory.data[0] if territory.data else {},
+        "territory": row_to_dict(territory),
         "coins_earned": total,
         "bonus_preclaim": bonus,
         "balance": balance,
@@ -66,28 +60,23 @@ async def conquer_territory(req: ConquerRequest, user_id: str = Depends(get_curr
 @router.post("/defend")
 async def defend_territory(poi_id: str, user_id: str = Depends(get_current_user)):
     """Defend a territory by completing a quiz."""
-    territory = (
-        supabase.table("territories")
-        .select("*")
-        .eq("poi_id", poi_id)
-        .eq("user_id", user_id)
-        .eq("active", True)
-        .single()
-        .execute()
-    )
+    with get_db() as conn:
+        territory = conn.execute(
+            "SELECT * FROM territories WHERE poi_id = ? AND user_id = ? AND active = 1",
+            (poi_id, user_id),
+        ).fetchone()
 
-    if not territory.data:
-        raise HTTPException(status_code=404, detail="Non possiedi questo territorio")
+        if not territory:
+            raise HTTPException(status_code=404, detail="Non possiedi questo territorio")
 
-    t = territory.data
-    new_weeks = t["weeks_held"] + 1
-    new_tier = min(3, 1 + new_weeks // 2)
+        t = dict(territory)
+        new_weeks = t["weeks_held"] + 1
+        new_tier = min(3, 1 + new_weeks // 2)
 
-    supabase.table("territories").update({
-        "last_defended_at": datetime.now(timezone.utc).isoformat(),
-        "weeks_held": new_weeks,
-        "tier": new_tier,
-    }).eq("id", t["id"]).execute()
+        conn.execute(
+            "UPDATE territories SET last_defended_at = ?, weeks_held = ?, tier = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(), new_weeks, new_tier, t["id"]),
+        )
 
     balance = await award_coins(user_id, DEFENSE_COINS, "difesa_territorio", poi_id)
 
@@ -103,60 +92,69 @@ async def defend_territory(poi_id: str, user_id: str = Depends(get_current_user)
 @router.get("/user/{user_id}")
 async def get_user_territories(user_id: str):
     """Get all active territories for a user."""
-    result = supabase.table("territories").select("*").eq("user_id", user_id).eq("active", True).execute()
-    return {"territories": result.data}
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM territories WHERE user_id = ? AND active = 1", (user_id,)
+        ).fetchall()
+    return {"territories": rows_to_list(rows)}
 
 
 @router.get("/poi/{poi_id}")
 async def get_poi_owner(poi_id: str):
     """Get current owner of a POI."""
-    result = (
-        supabase.table("territories")
-        .select("*, users(display_name, avatar_url, level)")
-        .eq("poi_id", poi_id)
-        .eq("active", True)
-        .execute()
-    )
-    if not result.data:
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT t.*, u.display_name, u.avatar_url, u.level
+               FROM territories t
+               LEFT JOIN users u ON t.user_id = u.id
+               WHERE t.poi_id = ? AND t.active = 1""",
+            (poi_id,),
+        ).fetchone()
+
+    if not row:
         return {"owner": None, "status": "free"}
-    return {"owner": result.data[0], "status": "owned"}
+
+    data = dict(row)
+    # Nest user info like Supabase did
+    data["users"] = {
+        "display_name": data.pop("display_name", None),
+        "avatar_url": data.pop("avatar_url", None),
+        "level": data.pop("level", None),
+    }
+    return {"owner": data, "status": "owned"}
 
 
 @router.get("/city/{city_slug}")
 async def get_city_territories(city_slug: str):
     """Get all active territories in a city."""
-    result = (
-        supabase.table("territories")
-        .select("poi_id, user_id, tier, weeks_held, conquered_at, last_defended_at")
-        .eq("city_slug", city_slug)
-        .eq("active", True)
-        .execute()
-    )
-    return {"city": city_slug, "territories": result.data}
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT poi_id, user_id, tier, weeks_held, conquered_at, last_defended_at FROM territories WHERE city_slug = ? AND active = 1",
+            (city_slug,),
+        ).fetchall()
+    return {"city_slug": city_slug, "territories": rows_to_list(rows)}
 
 
 @router.post("/decay")
 async def run_decay():
-    """Run decay check — deactivate undefended territories."""
+    """Mark territories as inactive if not defended in DECAY_DAYS days."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=DECAY_DAYS)).isoformat()
-    expired = (
-        supabase.table("territories")
-        .select("*")
-        .eq("active", True)
-        .lt("last_defended_at", cutoff)
-        .execute()
-    )
+    now = datetime.now(timezone.utc).isoformat()
+    decayed = []
 
-    deactivated = 0
-    for t in expired.data or []:
-        supabase.table("territories").update({"active": False}).eq("id", t["id"]).execute()
-        supabase.table("territory_history").insert({
-            "poi_id": t["poi_id"],
-            "user_id": t["user_id"],
-            "city_slug": t["city_slug"],
-            "from_date": t["conquered_at"],
-            "to_date": datetime.now(timezone.utc).isoformat(),
-        }).execute()
-        deactivated += 1
+    with get_db() as conn:
+        stale = conn.execute(
+            "SELECT * FROM territories WHERE active = 1 AND last_defended_at < ?",
+            (cutoff,),
+        ).fetchall()
 
-    return {"deactivated": deactivated}
+        for t in stale:
+            t = dict(t)
+            conn.execute("UPDATE territories SET active = 0 WHERE id = ?", (t["id"],))
+            conn.execute(
+                "INSERT INTO territory_history (poi_id, user_id, city_slug, from_date, to_date) VALUES (?, ?, ?, ?, ?)",
+                (t["poi_id"], t["user_id"], t["city_slug"], t["conquered_at"], now),
+            )
+            decayed.append(t["poi_id"])
+
+    return {"decayed": decayed, "count": len(decayed)}
