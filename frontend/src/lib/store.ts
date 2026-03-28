@@ -56,6 +56,7 @@ export interface TripProfile {
   interests: string[];
   pace: "slow" | "medium" | "fast";
   experienceType: "classico" | "esploratore" | "mix";
+  startDate?: string; // ISO date "YYYY-MM-DD"
 }
 
 export interface RankedPOI extends POI {
@@ -89,6 +90,14 @@ export interface TripState {
   itinerary: ItineraryDay[];
 }
 
+export interface ItineraryPOI {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  category: string;
+}
+
 export interface SavedItinerary {
   id: string;
   city: string;
@@ -97,6 +106,8 @@ export interface SavedItinerary {
   likedPoisCount: number;
   itinerary: ItineraryDay[];
   tripProfile: TripProfile;
+  pois?: ItineraryPOI[];
+  startDate?: string; // ISO date "YYYY-MM-DD"
 }
 
 interface AppStore {

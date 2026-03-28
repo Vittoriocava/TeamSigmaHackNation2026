@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS itineraries (
     itinerary_json TEXT NOT NULL,
     trip_profile_json TEXT DEFAULT '{}',
     status TEXT DEFAULT 'future',
+    start_date TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -188,6 +189,14 @@ def init_db():
     """Create all tables if they don't exist."""
     with get_db() as conn:
         conn.executescript(SCHEMA)
+        # Migrations for existing databases
+        for migration in [
+            "ALTER TABLE itineraries ADD COLUMN start_date TEXT",
+        ]:
+            try:
+                conn.execute(migration)
+            except Exception:
+                pass  # column already exists
 
 
 def row_to_dict(row) -> dict:

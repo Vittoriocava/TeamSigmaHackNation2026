@@ -124,7 +124,7 @@ export default function NewBoardPage() {
         currentStopIndex: 0,
         score: 0,
       });
-      router.push(`/board/${gameId}?city=${encodeURIComponent(city.name)}&mode=${mode}`);
+      router.push(`/viaggio/${encodeURIComponent(city.name)}`);
       return;
     }
 
@@ -160,7 +160,7 @@ export default function NewBoardPage() {
         });
       }
 
-      router.push(`/board/${resolvedGameId}?city=${encodeURIComponent(city.name)}&mode=${mode}`);
+      router.push(`/viaggio/${encodeURIComponent(city.name)}`);
     } catch (err) {
       setSearchError("Errore nella creazione del gioco. Riprova.");
       setCreatingGame(false);

@@ -26,6 +26,7 @@ type ExpKey = TripProfile["experienceType"];
 
 const STEPS = [
   "Quanti giorni?",
+  "Quando parti?",
   "Qual è il tuo budget?",
   "Con chi viaggi?",
   "Cosa ti interessa?",
@@ -41,6 +42,7 @@ export default function PianificaPage() {
 
   const [step, setStep] = useState(0);
   const [days, setDays] = useState(2);
+  const [startDate, setStartDate] = useState<string>("");
   const [budget, setBudget] = useState<BudgetKey>("medio");
   const [group, setGroup] = useState<GroupKey>("solo");
   const [interests, setInterests] = useState<string[]>([]);
@@ -56,7 +58,8 @@ export default function PianificaPage() {
   };
 
   const canNext = () => {
-    if (step === 3 && interests.length === 0) return false;
+    if (step === 1 && !startDate) return false;
+    if (step === 4 && interests.length === 0) return false;
     return true;
   };
 
@@ -71,6 +74,7 @@ export default function PianificaPage() {
         interests,
         pace,
         experienceType,
+        startDate: startDate || undefined,
       };
       setTrip({ city, tripProfile, rankedPois: [], likedPois: [], itinerary: [] });
       router.push(`/pianifica/${encodeURIComponent(city)}/pois`);
@@ -145,8 +149,44 @@ export default function PianificaPage() {
               </div>
             )}
 
-            {/* Step 1: Budget */}
+            {/* Step 1: Start date */}
             {step === 1 && (
+              <div>
+                <p className="text-sm text-white/50 mb-6">Scegli la data di partenza del tuo viaggio</p>
+                <div className="glass rounded-2xl p-5">
+                  <input
+                    type="date"
+                    value={startDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full bg-transparent text-white text-lg font-semibold focus:outline-none cursor-pointer"
+                    style={{ colorScheme: "dark" }}
+                  />
+                  {startDate && (
+                    <p className="text-xs text-white/40 mt-3">
+                      Arrivo previsto:{" "}
+                      {new Date(
+                        new Date(startDate).getTime() + (days - 1) * 86400000
+                      ).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" })}
+                    </p>
+                  )}
+                </div>
+                {startDate && (
+                  <div className="mt-4 glass rounded-2xl p-4 flex items-center gap-3">
+                    <span className="text-2xl">🗓️</span>
+                    <div>
+                      <p className="font-semibold text-sm">
+                        {new Date(startDate).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+                      </p>
+                      <p className="text-xs text-white/40">{days} {days === 1 ? "giorno" : "giorni"} di viaggio</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 2: Budget */}
+            {step === 2 && (
               <div className="space-y-3">
                 {(
                   [
@@ -176,8 +216,8 @@ export default function PianificaPage() {
               </div>
             )}
 
-            {/* Step 2: Group */}
-            {step === 2 && (
+            {/* Step 3: Group */}
+            {step === 3 && (
               <div className="grid grid-cols-2 gap-3">
                 {(
                   [
@@ -204,8 +244,8 @@ export default function PianificaPage() {
               </div>
             )}
 
-            {/* Step 3: Interests */}
-            {step === 3 && (
+            {/* Step 4: Interests */}
+            {step === 4 && (
               <div>
                 <p className="text-sm text-white/50 mb-4">Seleziona almeno un interesse</p>
                 <div className="flex flex-wrap gap-2">
@@ -228,8 +268,8 @@ export default function PianificaPage() {
               </div>
             )}
 
-            {/* Step 4: Pace */}
-            {step === 4 && (
+            {/* Step 5: Pace */}
+            {step === 5 && (
               <div className="space-y-3">
                 {(
                   [
@@ -258,8 +298,8 @@ export default function PianificaPage() {
               </div>
             )}
 
-            {/* Step 5: Experience type */}
-            {step === 5 && (
+            {/* Step 6: Experience type */}
+            {step === 6 && (
               <div className="space-y-3">
                 {(
                   [

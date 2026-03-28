@@ -15,6 +15,7 @@ class SaveItineraryRequest(BaseModel):
     liked_pois_count: int
     itinerary: list
     trip_profile: dict = {}
+    start_date: str | None = None
 
 
 class CollectPieceRequest(BaseModel):
@@ -29,10 +30,11 @@ async def save_itinerary(req: SaveItineraryRequest, user_id: str = Depends(get_c
     itin_id = str(uuid.uuid4())
     with get_db() as conn:
         conn.execute(
-            """INSERT INTO itineraries (id, user_id, city, city_slug, days, liked_pois_count, itinerary_json, trip_profile_json, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'future')""",
+            """INSERT INTO itineraries (id, user_id, city, city_slug, days, liked_pois_count, itinerary_json, trip_profile_json, status, start_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'future', ?)""",
             (itin_id, user_id, req.city, req.city_slug, req.days, req.liked_pois_count,
-             json.dumps(req.itinerary, ensure_ascii=False), json.dumps(req.trip_profile, ensure_ascii=False)),
+             json.dumps(req.itinerary, ensure_ascii=False), json.dumps(req.trip_profile, ensure_ascii=False),
+             req.start_date),
         )
     return {"id": itin_id, "status": "saved"}
 

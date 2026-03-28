@@ -107,7 +107,16 @@ export default function ItinerarioPage() {
           likedPoisCount: trip.likedPois.length,
           itinerary: generatedDays,
           tripProfile: trip.tripProfile,
+          startDate: trip.tripProfile.startDate,
+          pois: trip.likedPois.map((p) => ({
+            id: p.id,
+            name: p.name,
+            lat: p.lat,
+            lng: p.lng,
+            category: p.category,
+          })),
         });
+        router.replace(`/viaggio/${encodeURIComponent(city)}`);
       }
     } catch {
       setError("Errore nella generazione dell'itinerario. Riprova.");

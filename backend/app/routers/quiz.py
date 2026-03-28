@@ -1,7 +1,9 @@
 import uuid
 import random
 import string
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from app.models import POI, UserProfile, QuizAnswer
 from app.auth import get_current_user
 from app.services.ai import generate_quiz, question_hash
@@ -156,3 +158,90 @@ async def generate_poi_quiz(poi_id: str, poi_name: str, difficulty: str = "mediu
     profile = UserProfile(language="it")
     q = await generate_quiz(poi, profile, difficulty)
     return {"question": q.model_dump(), "question_hash": question_hash(q)}
+
+
+# ── POI piece quiz ─────────────────────────────────────────────────────────────
+
+class PlayQuizRequest(BaseModel):
+    poi_name: str
+    poi_description: str = ""
+    city: str = ""
+
+
+class SubmitQuizRequest(BaseModel):
+    poi_name: str
+    city: str
+    correct: int
+    total: int = 5
+
+
+@router.post("/poi/{poi_id}/play")
+async def play_poi_quiz(
+    poi_id: str,
+    req: PlayQuizRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """Generate 5 questions for a POI solo quiz (for piece collection)."""
+    poi = POI(
+        id=poi_id,
+        name=req.poi_name,
+        lat=0,
+        lng=0,
+        description=req.poi_description or f"Luogo da visitare a {req.city}",
+    )
+    profile = UserProfile(language="it", cultural_level="casual")
+
+    # Check how many pieces the user already has (cap at 3)
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT pieces_collected FROM user_pieces WHERE user_id = ? AND poi_id = ?",
+            (user_id, poi_id),
+        ).fetchone()
+    pieces_owned = row["pieces_collected"] if row else 0
+
+    # Generate 5 questions sequentially to avoid duplicates
+    difficulties = ["easy", "easy", "medium", "medium", "hard"]
+    questions = []
+    for diff in difficulties:
+        q = await generate_quiz(poi, profile, diff, [qq.question for qq in questions])
+        questions.append(q)
+
+    return {
+        "poi_id": poi_id,
+        "poi_name": req.poi_name,
+        "questions": [q.model_dump() for q in questions],
+        "pieces_owned": pieces_owned,
+    }
+
+
+@router.post("/poi/{poi_id}/submit")
+async def submit_poi_quiz(
+    poi_id: str,
+    req: SubmitQuizRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """Submit quiz result. Awards 1 piece if >= 3/5 correct (max 3 pieces per POI)."""
+    piece_earned = req.correct >= 3
+
+    with get_db() as conn:
+        if piece_earned:
+            conn.execute(
+                """INSERT INTO user_pieces (user_id, poi_id, poi_name, city, pieces_collected)
+                   VALUES (?, ?, ?, ?, 1)
+                   ON CONFLICT(user_id, poi_id) DO UPDATE SET
+                     pieces_collected = MIN(pieces_collected + 1, 3),
+                     poi_name = excluded.poi_name""",
+                (user_id, poi_id, req.poi_name, req.city),
+            )
+        row = conn.execute(
+            "SELECT pieces_collected FROM user_pieces WHERE user_id = ? AND poi_id = ?",
+            (user_id, poi_id),
+        ).fetchone()
+
+    pieces_total = row["pieces_collected"] if row else 0
+    return {
+        "piece_earned": piece_earned,
+        "pieces_total": pieces_total,
+        "correct": req.correct,
+        "total": req.total,
+    }
