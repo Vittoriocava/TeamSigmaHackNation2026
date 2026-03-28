@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   Search,
   Bell,
   MapPin,
-  Plus,
   Shield,
   Zap,
   Users,
@@ -35,6 +34,12 @@ export default function HomePage() {
   const router = useRouter();
   const { user, profile } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (!user) {
+      router.replace("/auth");
+    }
+  }, [user, router]);
 
   return (
     <div className="min-h-screen pb-20">
@@ -147,7 +152,7 @@ export default function HomePage() {
         <h2 className="font-display text-lg font-semibold mb-3">
           I tuoi viaggi
         </h2>
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+        <div className="flex gap-3 overflow-x-auto pt-2 pb-2 -mx-4 px-4 scrollbar-hide">
           {MOCK_TRIPS.map((trip) => (
             <Card
               key={trip.slug}
@@ -184,16 +189,6 @@ export default function HomePage() {
               )}
             </Card>
           ))}
-          <Card
-            onClick={() => {
-              const input = document.querySelector("input");
-              input?.focus();
-            }}
-            className="min-w-[140px] flex-shrink-0 flex flex-col items-center justify-center"
-          >
-            <Plus size={24} className="text-white/40 mb-2" />
-            <span className="text-xs text-white/40">Nuovo viaggio</span>
-          </Card>
         </div>
       </section>
 
