@@ -85,6 +85,43 @@ Supabase gestisce tutto: signup/login (email, Google OAuth), sessioni JWT, profi
 
 ---
 
+## Economia di gioco — il ciclo casa ↔ città
+
+Questo è il cuore del retention loop. Le due modalità non sono separate: si alimentano a vicenda.
+
+```
+[IN CITTÀ - Campo]                    [A CASA - Divano]
+Esplori → conquisti territorio   ←→   Quiz online → guadagni monete
+Spendi monete per bonus          ←→   Difendi territorio conquistato
+Perdi territorio se non torni   ←→   Scopri nuovi borghi da visitare
+```
+
+### Monete (valuta di gioco)
+Guadagnate **a casa** attraverso:
+- Sessioni quiz online con altri giocatori (punteggio → monete)
+- Mantenimento del territorio già conquistato (quiz sul posto specifico)
+- Sfide giornaliere e settimanali
+
+Spese **in città** per:
+- Sbloccare un suggerimento su una tappa difficile
+- Attivare il "boost narratore" (ElevenLabs con voce speciale)
+- Accedere a tappe segrete non presenti nel percorso base
+- Rivendicare un territorio conteso
+
+### Territorio e Decay
+Ogni tappa conquistata fisicamente diventa **territorio del giocatore**, visibile sulla mappa con il suo colore. Ma il territorio decade nel tempo se non viene mantenuto:
+
+- **Tier 1 — Stabile** (7 giorni): fai un quiz sulla tappa da casa, il territorio è confermato
+- **Tier 2 — A rischio** (14 giorni senza azione): la nebbia ricomincia a coprire il bordo
+- **Tier 3 — Contendibile** (21+ giorni): altri giocatori possono "sfidare" il territorio da casa con un quiz
+
+Questo meccanismo vale soprattutto per i **borghi minori**: se sei l'unico che ha visitato Civita di Bagnoregio, sei il "Guardiano" di quel borgo — un titolo unico. Ma devi tornare (o difendere da casa) altrimenti qualcun altro te lo porta via.
+
+### Micro-turismo e turismo di prossimità
+Il decay del territorio è il motore del micro-turismo. Il giocatore a Roma vede sulla mappa che ha conquistato Tivoli 3 settimane fa e sta per perderla. Tivoli è a 30 km. Ci torna per un pomeriggio. Non per fare il turista — per difendere il suo territorio. Il gioco trasforma un borgo ignorato in una destinazione con urgenza narrativa.
+
+---
+
 ## Meccaniche di gioco
 
 ### Board
@@ -120,11 +157,15 @@ Tecnicamente: layer canvas/SVG su Leaflet con celle esagonali o a griglia, opaci
 - La nebbia si apre in tempo reale per tutti quando qualcuno sblocca una tappa (Supabase Realtime)
 - Classifica live in-game durante la partita
 
+### Sessioni Quiz Online (modalità casa)
+Lobby pubblica o privata (codice stanza), 2-8 giocatori, domande generate da Claude su una città scelta. Funziona come Kahoot ma il contenuto è generato live e personalizzato. Al termine: monete proporzionali al punteggio. È la modalità che tiene vivo il gioco nei giorni in cui non si esce.
+
 ### Classifiche
-- **Classifica Globale** — top player per punti totali accumulati su tutte le città
-- **Classifica per Città** — chi ha esplorato di più Roma, Milano, Napoli...
-- **Classifica Team** — punteggio aggregato del gruppo
-- **Classifica Quiz Generale** — per la modalità quiz standalone (rapidità + correttezza)
+- **Classifica Globale** — top player per punti totali
+- **Classifica per Città** — chi domina Roma, chi domina Napoli
+- **Classifica Borghi** — territori unici conquistati (incentiva i posti meno noti)
+- **Classifica Guardiani** — chi mantiene il territorio più a lungo su un singolo posto
+- **Classifica Quiz Settimanale** — reset ogni lunedì, sempre competitiva
 - Aggiornamento real-time via Supabase Realtime, nessun polling
 
 ---
@@ -150,7 +191,10 @@ Il prompt a DALL-E viene costruito da Claude: *"Il Foro Romano nel 100 d.C., fot
 ### 4. Multiplayer asincrono
 Più giocatori, stessa città, board diversa. Alla fine si confrontano le "versioni" della città che hanno scoperto — ognuno ha vissuto un pezzo diverso.
 
-### 5. Borghi Italiani — copertura capillare
+### 5. Micro-turismo e turismo di prossimità — il loop narrativo
+Il territorio che decade è il miglior motore di micro-turismo mai inventato. Non è una notifica push che dice "torna a visitare Roma". È la mappa che mostra il tuo territorio che si restringe, il tuo colore che sbiadisce, un'altra persona che si avvicina al tuo borgo preferito. Civita di Bagnoregio, Matera vecchia, Bobbio, Spello — posti a 1-2 ore da casa di milioni di italiani, mai visitati perché "non c'è motivo urgente". Il gioco crea il motivo. Questo è il messaggio da vendere anche ai comuni e alle pro loco: Play The City è promozione territoriale che funziona perché il giocatore è già motivato.
+
+### 6. Borghi Italiani — copertura capillare
 Il sistema non si limita a Roma, Milano, Firenze. Funziona per qualsiasi comune italiano, anche quelli sotto i 500 abitanti. OSM ha dati su ogni borgo, Wikidata copre anche i comuni minori. Per i luoghi dove Wikipedia è scarna, Claude genera il contenuto a partire dai dati strutturati di Wikidata (coordinate, popolazione, anno di fondazione, monumenti censiti). Un borgo sperduto delle Marche diventa un'avventura unica quanto il Colosseo — anzi di più, perché nessuno lo conosce già.
 
 ### 6. Giocatori Attivi in Tempo Reale sulla Mappa
@@ -195,10 +239,15 @@ games          → id, city, board_json, created_at
 game_players   → game_id, user_id, score, unlocked_pois[], completed_at
 teams          → id, room_code, game_id, name
 team_members   → team_id, user_id
-leaderboard    → user_id, city, total_score, pois_unlocked (view materializzata)
-quiz_results   → user_id, poi_id, correct, time_ms, created_at
-presence       → user_id, city_slug, last_seen (TTL 5 min, per "giocatori attivi ora")
-temporal_images → poi_id, era_label, image_url, dalle_prompt, created_at (cache immagini generate)
+leaderboard       → user_id, city, total_score, pois_unlocked (view materializzata)
+quiz_results      → user_id, poi_id, correct, time_ms, created_at
+presence          → user_id, city_slug, last_seen (TTL 5 min)
+temporal_images   → poi_id, era_label, image_url, dalle_prompt, created_at (cache)
+territories       → user_id, poi_id, conquered_at, last_defended_at, tier (1/2/3)
+coins             → user_id, balance, lifetime_earned
+coin_transactions → user_id, amount, reason, created_at
+quiz_sessions     → id, room_code, city, host_user_id, status, created_at
+quiz_session_players → session_id, user_id, score, coins_earned
 ```
 
 **Cosa lasciare fuori dal MVP:**
@@ -244,6 +293,9 @@ temporal_images → poi_id, era_label, image_url, dalle_prompt, created_at (cach
 │   ├── audio_engine.py        # testo → ElevenLabs → audio stream per ogni tappa
 │   ├── image_engine.py        # Claude genera prompt → DALL-E 3 → immagine storica per linea temporale
 │   ├── presence_engine.py     # giocatori attivi ora per città (Supabase Realtime)
+│   ├── territory_engine.py    # calcolo decay territorio, tier, sfide
+│   ├── coin_engine.py         # economia monete: earn/spend/transazioni
+│   ├── quiz_session.py        # sessioni quiz multiplayer online (lobby + sync)
 │   └── game_builder.py        # assembla il game object
 └── idea.md
 ```
