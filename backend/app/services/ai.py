@@ -1,3 +1,4 @@
+import asyncio
 import json
 import hashlib
 from openai import OpenAI
@@ -44,6 +45,11 @@ def _chat(messages: list, max_tokens: int = 500) -> str:
         messages=messages,
     )
     return response.choices[0].message.content
+
+
+async def _chat_async(messages: list, max_tokens: int = 500) -> str:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _chat(messages, max_tokens))
 
 
 async def generate_quiz(
@@ -204,7 +210,7 @@ Deduci e rispondi SOLO con JSON:
   "age_range": "fascia dedotta o null"
 }}"""
 
-    text = _chat([{"role": "user", "content": prompt}], max_tokens=300)
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
     start = text.find("{")
     end = text.rfind("}") + 1
     return json.loads(text[start:end])
