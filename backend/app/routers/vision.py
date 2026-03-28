@@ -2,7 +2,7 @@ import json
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.models import POI
-from app.services.ai import analyze_photo, generate_dalle_prompt, get_client, MODEL
+from app.services.ai import analyze_photo, generate_dalle_prompt, get_client, _vision_model
 from app.db import supabase
 
 router = APIRouter(prefix="/api/ai/vision", tags=["vision"])
@@ -76,16 +76,16 @@ async def come_era(req: ComeEraRequest):
 async def souvenir(req: SouvenirRequest):
     """'Foto col Monumento' — generate historical souvenir composite."""
     client = get_client()
-    response = client.messages.create(
-        model=MODEL,
+    response = client.chat.completions.create(
+        model=_vision_model(),
         max_tokens=500,
         messages=[
             {
                 "role": "user",
                 "content": [
                     {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": "image/jpeg", "data": req.image_base64},
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{req.image_base64}"},
                     },
                     {
                         "type": "text",
@@ -95,7 +95,7 @@ Identifica:
 2. La posizione del monumento
 3. La prospettiva
 
-Poi genera un prompt DALL-E 3 per ricreare lo sfondo storico di {req.poi_name} nell'antichità,
+Poi genera un prompt per ricreare lo sfondo storico di {req.poi_name} nell'antichità,
 mantenendo la stessa prospettiva e lasciando spazio per il soggetto umano.
 
 Rispondi con JSON:
@@ -112,7 +112,7 @@ Rispondi con JSON:
         ],
     )
 
-    text = response.content[0].text
+    text = response.choices[0].message.content
     start = text.find("{")
     end = text.rfind("}") + 1
     result = json.loads(text[start:end])

@@ -1,24 +1,49 @@
 import json
 import hashlib
-from anthropic import Anthropic
+from openai import OpenAI
 from app.config import get_settings
 from app.models import POI, UserProfile, QuizQuestion
 
+REGOLO_BASE_URL = "https://api.regolo.ai/v1"
+
 _client = None
 
-MODEL = "claude-sonnet-4-20250514"
 
-
-def get_client() -> Anthropic:
+def get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = Anthropic(api_key=get_settings().claude_api_key)
+        _client = OpenAI(
+            api_key=get_settings().regolo_api_key,
+            base_url=REGOLO_BASE_URL,
+        )
     return _client
+
+
+def _model() -> str:
+    return get_settings().regolo_chat_model
+
+
+def _vision_model() -> str:
+    return get_settings().regolo_vision_model
+
+
+def _image_model() -> str:
+    return get_settings().regolo_image_model
 
 
 def _lang(profile: UserProfile) -> str:
     langs = {"it": "italiano", "en": "English", "fr": "français", "es": "español"}
     return langs.get(profile.language, "italiano")
+
+
+def _chat(messages: list, max_tokens: int = 500) -> str:
+    client = get_client()
+    response = client.chat.completions.create(
+        model=_model(),
+        max_tokens=max_tokens,
+        messages=messages,
+    )
+    return response.choices[0].message.content
 
 
 async def generate_quiz(
@@ -45,13 +70,7 @@ Rispondi SOLO con JSON valido:
   "source": "fonte verificabile"
 }}"""
 
-    client = get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = response.content[0].text
+    text = _chat([{"role": "user", "content": prompt}], max_tokens=500)
     start = text.find("{")
     end = text.rfind("}") + 1
     data = json.loads(text[start:end])
@@ -76,13 +95,7 @@ Regole:
 - Includi un fatto sorprendente poco noto
 - Chiudi con una connessione emotiva o una domanda retorica"""
 
-    client = get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=600,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
+    return _chat([{"role": "user", "content": prompt}], max_tokens=600)
 
 
 async def generate_curiosity(poi: POI, profile: UserProfile) -> str:
@@ -94,13 +107,7 @@ Livello: {profile.cultural_level}
 
 Max 80 parole. Tono: "lo sapevi che...?" coinvolgente."""
 
-    client = get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=200,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
+    return _chat([{"role": "user", "content": prompt}], max_tokens=200)
 
 
 async def generate_connection(poi1: POI, poi2: POI, profile: UserProfile) -> str:
@@ -112,55 +119,46 @@ La connessione può essere storica, artistica, leggendaria o urbana.
 Lingua: {_lang(profile)}
 Max 100 parole. Tono narrativo, come se stessi svelando un segreto."""
 
-    client = get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=250,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
+    return _chat([{"role": "user", "content": prompt}], max_tokens=250)
 
 
 async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
-    system = "Sei l'agente visivo di Play The City. Analizza foto di luoghi e monumenti."
-    prompt = "Identifica il luogo in questa foto. Rispondi con JSON: {\"identified\": true/false, \"place_name\": \"...\", \"confidence\": 0.0-1.0, \"description\": \"breve descrizione di cosa vedi\", \"perspective\": \"frontale/laterale/aerea/altro\"}"
+    system_msg = "Sei l'agente visivo di Play The City. Analizza foto di luoghi e monumenti."
+    user_text = 'Identifica il luogo in questa foto. Rispondi con JSON: {"identified": true/false, "place_name": "...", "confidence": 0.0-1.0, "description": "breve descrizione di cosa vedi", "perspective": "frontale/laterale/aerea/altro"}'
     if poi:
-        prompt += f"\nIl luogo atteso è: {poi.name}. Conferma se corrisponde."
+        user_text += f"\nIl luogo atteso è: {poi.name}. Conferma se corrisponde."
 
     client = get_client()
-    response = client.messages.create(
-        model=MODEL,
+    response = client.chat.completions.create(
+        model=_vision_model(),
         max_tokens=300,
         messages=[
+            {"role": "system", "content": system_msg},
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_base64}},
-                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+                    },
+                    {"type": "text", "text": user_text},
                 ],
-            }
+            },
         ],
-        system=system,
     )
-    text = response.content[0].text
+    text = response.choices[0].message.content
     start = text.find("{")
     end = text.rfind("}") + 1
     return json.loads(text[start:end])
 
 
 async def generate_dalle_prompt(poi: POI, era: str) -> str:
-    prompt = f"""Genera un prompt per DALL-E 3 che ricostruisca "{poi.name}" nell'epoca "{era}".
+    prompt = f"""Genera un prompt per la generazione di immagini che ricostruisca "{poi.name}" nell'epoca "{era}".
 Il prompt deve produrre un'immagine fotorealistica, prospettiva frontale, luce naturale.
 Includi dettagli storici accurati: architettura, persone, vestiti, atmosfera dell'epoca.
 Rispondi SOLO con il prompt in inglese, nient'altro. Max 200 parole."""
 
-    client = get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text.strip()
+    return _chat([{"role": "user", "content": prompt}], max_tokens=300)
 
 
 async def rank_pois(
@@ -186,13 +184,7 @@ POI da valutare:
 Rispondi SOLO con un JSON array di oggetti con i campi originali + quelli nuovi.
 Ordina per relevance_score decrescente."""
 
-    client = get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = response.content[0].text
+    text = _chat([{"role": "user", "content": prompt}], max_tokens=4000)
     start = text.find("[")
     end = text.rfind("]") + 1
     return json.loads(text[start:end])
@@ -212,13 +204,7 @@ Deduci e rispondi SOLO con JSON:
   "age_range": "fascia dedotta o null"
 }}"""
 
-    client = get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = response.content[0].text
+    text = _chat([{"role": "user", "content": prompt}], max_tokens=300)
     start = text.find("{")
     end = text.rfind("}") + 1
     return json.loads(text[start:end])

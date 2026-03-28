@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.config import get_settings
 from app.models import NarrationRequest
-from app.services.ai import get_client, MODEL
+from app.services.ai import get_client, _model
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 
@@ -35,12 +35,12 @@ Non iniziare MAI con il nome del posto. Sii coinvolgente, evocativo, mai scolast
 
 async def _generate_narration_text(req: NarrationRequest) -> str:
     client = get_client()
-    response = client.messages.create(
-        model=MODEL,
+    response = client.chat.completions.create(
+        model=_model(),
         max_tokens=800,
         messages=[{"role": "user", "content": _narration_prompt(req)}],
     )
-    return response.content[0].text
+    return response.choices[0].message.content
 
 
 @router.post("/narrate")

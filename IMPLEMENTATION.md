@@ -155,10 +155,19 @@ backend/
 
 | Servizio | Come ottenere | Variabile |
 |----------|---------------|-----------|
-| **Claude** | [console.anthropic.com](https://console.anthropic.com) → API Keys | `CLAUDE_API_KEY` |
-| **OpenAI** (DALL-E 3) | [platform.openai.com](https://platform.openai.com) → API Keys | `OPENAI_API_KEY` |
+| **Regolo.ai** | [dashboard.regolo.ai](https://dashboard.regolo.ai) → Virtual Keys → crea chiave "All models" | `REGOLO_API_KEY` |
 | **ElevenLabs** | [elevenlabs.io](https://elevenlabs.io) → Profile → API Key | `ELEVENLABS_API_KEY` |
 | **ElevenLabs Voice** | Scegli voice ID dal catalogo (default: Rachel) | `ELEVENLABS_VOICE_ID` |
+
+**Modelli Regolo (configurabili via .env):**
+
+| Variabile | Default | Uso |
+|-----------|---------|-----|
+| `REGOLO_CHAT_MODEL` | `Llama-3.3-70B-Instruct` | Quiz, storie, ranking POI, curiosità |
+| `REGOLO_VISION_MODEL` | `Llama-3.2-11B-Vision-Instruct` | Analisi foto AR, souvenir |
+| `REGOLO_IMAGE_MODEL` | `flux-dev` | Generazione immagini storiche timeline |
+
+> Tutti i modelli vengono scelti dal catalogo disponibile nel tuo progetto Regolo. L'SDK usato è `openai` Python con `base_url="https://api.regolo.ai/v1"`.
 
 ### 3. Backend
 
@@ -275,13 +284,15 @@ GET  /api/leaderboard/city/{slug}     → classifica per città
 ### `backend/.env`
 ```
 SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_KEY=eyJ...           # anon key
-SUPABASE_SERVICE_KEY=eyJ...   # service_role key
-CLAUDE_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
+SUPABASE_KEY=eyJ...             # anon key
+SUPABASE_SERVICE_KEY=eyJ...     # service_role key
+REGOLO_API_KEY=...              # da dashboard.regolo.ai → Virtual Keys
+REGOLO_CHAT_MODEL=Llama-3.3-70B-Instruct
+REGOLO_VISION_MODEL=Llama-3.2-11B-Vision-Instruct
+REGOLO_IMAGE_MODEL=flux-dev
 ELEVENLABS_API_KEY=...
 ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
-JWT_SECRET=...                # da Supabase Project Settings → API → JWT Secret
+JWT_SECRET=...                  # da Supabase Project Settings → API → JWT Secret
 ```
 
 ### `frontend/.env.local`

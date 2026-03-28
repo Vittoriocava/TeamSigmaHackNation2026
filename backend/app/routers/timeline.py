@@ -1,8 +1,7 @@
 from fastapi import APIRouter
-from openai import OpenAI
 from app.config import get_settings
 from app.models import POI
-from app.services.ai import generate_dalle_prompt
+from app.services.ai import generate_dalle_prompt, get_client, _image_model
 from app.db import supabase
 
 router = APIRouter(prefix="/api/ai/timeline", tags=["timeline"])
@@ -13,10 +12,6 @@ ERAS = [
     ("1800", "Early modern, 1800 AD"),
     ("1950", "Post-war, 1950"),
 ]
-
-
-def _get_openai() -> OpenAI:
-    return OpenAI(api_key=get_settings().openai_api_key)
 
 
 @router.get("/{poi_id}")
@@ -35,7 +30,6 @@ async def generate_timeline_images(poi_id: str, poi_name: str, poi_description: 
 
     cached_eras = {img["era_label"] for img in (cached.data or [])}
     poi = POI(id=poi_id, name=poi_name, lat=0, lng=0, description=poi_description)
-    client = _get_openai()
     images = list(cached.data or [])
 
     for era_label, era_desc in ERAS:
@@ -45,8 +39,8 @@ async def generate_timeline_images(poi_id: str, poi_name: str, poi_description: 
         dalle_prompt = await generate_dalle_prompt(poi, era_label)
 
         try:
-            response = client.images.generate(
-                model="dall-e-3",
+            response = get_client().images.generate(
+                model=_image_model(),
                 prompt=dalle_prompt,
                 size="1024x1024",
                 quality="standard",
