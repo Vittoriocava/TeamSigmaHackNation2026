@@ -1,0 +1,41 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Home, Map, Trophy, User, Compass } from "lucide-react";
+
+const navItems = [
+  { href: "/", icon: Home, label: "Home" },
+  { href: "/scopri", icon: Compass, label: "Scopri" },
+  { href: "/territorio", icon: Map, label: "Mappa" },
+  { href: "/quiz-live", icon: Trophy, label: "Quiz" },
+  { href: "/profilo", icon: User, label: "Profilo" },
+];
+
+export function BottomNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-dark">
+      <div className="max-w-md mx-auto flex justify-around items-center py-2 px-4">
+        {navItems.map(({ href, icon: Icon, label }) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all ${
+                active
+                  ? "text-primary bg-primary/10"
+                  : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              <Icon size={20} />
+              <span className="text-[10px] font-medium">{label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

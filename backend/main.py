@@ -1,0 +1,91 @@
+import logging
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from city_generator import router as city_router
+from personalization import router as profile_router
+from image_engine import router as image_router
+from audio_engine import router as audio_router
+from vision_engine import router as vision_router
+from territory_engine import router as territory_router
+from quiz_session import router as quiz_router
+from presence_engine import router as presence_router
+from game_builder import router as game_router
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("playthecity")
+
+app = FastAPI(
+    title="Play The City API",
+    description="Backend API per Play The City — HackNation 2026",
+    version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include all routers
+app.include_router(city_router)
+app.include_router(profile_router)
+app.include_router(image_router)
+app.include_router(audio_router)
+app.include_router(vision_router)
+app.include_router(territory_router)
+app.include_router(quiz_router)
+app.include_router(presence_router)
+app.include_router(game_router)
+
+
+@app.get("/")
+async def root():
+    return {"name": "Play The City API", "version": "0.1.0", "status": "running"}
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.on_event("startup")
+async def startup():
+    logger.info("🏙️ Play The City API running — HackNation 2026")
+
+
+# Leaderboard endpoint (global)
+from supabase_client import supabase
+
+
+@app.get("/api/leaderboard")
+async def get_leaderboard(limit: int = 50):
+    """Get global leaderboard."""
+    try:
+        result = supabase.from_("leaderboard").select("*").order("rank_score", desc=True).limit(limit).execute()
+        return {"leaderboard": result.data}
+    except Exception:
+        # Fallback if materialized view doesn't exist yet
+        result = (
+            supabase.table("users")
+            .select("id, display_name, avatar_url, level, xp")
+            .order("xp", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return {"leaderboard": result.data}
+
+
+@app.get("/api/leaderboard/city/{city_slug}")
+async def get_city_leaderboard(city_slug: str, limit: int = 50):
+    """Get leaderboard for a specific city."""
+    result = (
+        supabase.table("game_players")
+        .select("user_id, score, users(display_name, avatar_url, level)")
+        .order("score", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return {"city": city_slug, "leaderboard": result.data}
