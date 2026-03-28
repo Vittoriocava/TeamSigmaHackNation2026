@@ -14,6 +14,24 @@ import { BottomNav } from "@/components/UI/BottomNav";
 import { useStore } from "@/lib/store";
 import { apiPost } from "@/lib/api";
 import type { MapPOI } from "@/components/Map/GameMap";
+import { BottomNav } from "@/components/UI/BottomNav";
+import { Button } from "@/components/UI/Button";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    BookOpen,
+    Camera,
+    ChevronDown, ChevronUp,
+    Coins,
+    Eye,
+    HelpCircle,
+    Link2,
+    MapPin,
+    Trophy,
+    Volume2,
+} from "lucide-react";
+import dynamic from "next/dynamic";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 
 const GameMap = dynamic(
   () => import("@/components/Map/GameMap").then((m) => m.GameMap),

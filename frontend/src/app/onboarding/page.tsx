@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/UI/Button";
-import { useStore } from "@/lib/store";
 import { apiPost } from "@/lib/api";
+import { useStore } from "@/lib/store";
+import { AnimatePresence, motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface Question {
   id: number;
@@ -80,16 +79,6 @@ const QUESTIONS: Question[] = [
       { label: "I sapori locali", value: "food", emoji: "🧀" },
       { label: "L'architettura", value: "architettura", emoji: "⛪" },
       { label: "Il paesaggio", value: "natura", emoji: "🏞️" },
-    ],
-  },
-  {
-    id: 8,
-    text: "In che lingua preferisci l'app?",
-    options: [
-      { label: "Italiano", value: "it", emoji: "🇮🇹" },
-      { label: "English", value: "en", emoji: "🇬🇧" },
-      { label: "Français", value: "fr", emoji: "🇫🇷" },
-      { label: "Español", value: "es", emoji: "🇪🇸" },
     ],
   },
 ];
