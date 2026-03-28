@@ -251,13 +251,24 @@ export default function HomePage() {
           <AnimatePresence>
             {actions.map((action, i) => {
               const IconComponent = ICON_MAP[action.icon] || MapPin;
+              let href = "/scopri";
+              
+              // Route actions to appropriate pages
+              if (action.type === "territories") {
+                href = "/territorio";
+              } else if (action.type === "nearby_cities") {
+                href = "/scopri";
+              } else if (action.type === "future_quizzes") {
+                href = "/quiz-live";
+              }
+              
               return (
                 <motion.button
                   key={i}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  onClick={() => router.push(action.href || "/scopri")}
+                  onClick={() => router.push(href)}
                   className="w-full glass rounded-xl p-3 mb-2 flex items-center gap-3 hover:bg-white/20 transition-colors"
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${action.color}`}>
