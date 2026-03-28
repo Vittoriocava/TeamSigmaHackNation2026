@@ -142,6 +142,29 @@ CREATE TABLE IF NOT EXISTS presence (
     lng REAL DEFAULT 0,
     last_seen TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS itineraries (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    city TEXT NOT NULL,
+    city_slug TEXT NOT NULL,
+    days INTEGER DEFAULT 1,
+    liked_pois_count INTEGER DEFAULT 0,
+    itinerary_json TEXT NOT NULL,
+    trip_profile_json TEXT DEFAULT '{}',
+    status TEXT DEFAULT 'future',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS user_pieces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    poi_id TEXT NOT NULL,
+    poi_name TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    pieces_collected INTEGER DEFAULT 0,
+    UNIQUE(user_id, poi_id)
+);
 """
 
 

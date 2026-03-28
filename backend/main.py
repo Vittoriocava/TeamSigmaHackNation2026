@@ -18,6 +18,7 @@ from app.routers.quiz import router as quiz_router
 from app.routers.presence import router as presence_router
 from app.routers.game import router as game_router
 from app.routers.trip import router as trip_router
+from app.routers.itineraries import router as itineraries_router
 from app.db import get_db, init_db, rows_to_list
 from app.config import get_settings
 
@@ -50,6 +51,7 @@ app.include_router(quiz_router)
 app.include_router(presence_router)
 app.include_router(game_router)
 app.include_router(trip_router)
+app.include_router(itineraries_router)
 
 
 # ── Auth models ──────────────────────────────────────────────────────────────
