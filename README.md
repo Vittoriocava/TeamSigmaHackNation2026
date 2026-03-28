@@ -1,4 +1,4 @@
 # TeamSigmaHackNation2026
 
-backend: uvicorn main:app --reload
+backend: source venv/bin/activate && uvicorn main:app --reload
 frontend: npm run dev
