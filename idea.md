@@ -4,298 +4,417 @@
 
 **"Vivi la città da player, non da turista."**
 
-Un gioco digitale board-style (stile Gioco dell'Oca / Monopoli) dove ogni città diventa una mappa da esplorare con tappe, sfide, quiz e storie generate dinamicamente dall'AI — personalizzate sul profilo del giocatore.
+Un'app che è tre cose insieme:
+1. **Gioco di territorio** — conquista posti reali, difendili, sfida altri giocatori
+2. **Guida città intelligente** — musei, ristoranti, botteghe, posti instagrammabili, itinerari su misura
+3. **Guida turistica virtuale** — narratore AI + timeline storica + AR sul posto
 
-Tre modalità di gioco:
-- **Modalità Divano** — giochi da casa, esplori la città virtualmente prima di visitarla (o semplicemente per curiosità/cultura)
-- **Modalità Campo** — sei fisicamente in città, il GPS sblocca le tappe reali mentre ti muovi
-- **Modalità Team** — gruppo di giocatori, stessa città, tappe divise o in competizione — classifica live
-
-L'AI non è un chatbot. È il **narratore invisibile** che conosce il giocatore e costruisce la sua avventura unica: non monumenti da spuntare, ma connessioni nascoste da scoprire — tra storia, commercio, storie di vita, curiosità.
+L'AI non è un chatbot. È il motore che conosce il giocatore, costruisce il suo percorso unico, narra i luoghi con voce, genera immagini storiche, adatta difficoltà e contenuto. La città non è uno sfondo — è il personaggio principale.
 
 ---
 
-## Stack tecnico
+## I tre pilastri dell'app
+
+```
+┌─────────────────────┬──────────────────────────┬─────────────────────────┐
+│   GIOCO             │   GUIDA CITTÀ            │   GUIDA TURISTICA       │
+├─────────────────────┼──────────────────────────┼─────────────────────────┤
+│ Conquista territori │ Musei, ristoranti,        │ Narratore AI vocale     │
+│ Difendi da casa     │ discoteche, botteghe,     │ Timeline storica        │
+│ Quiz multiplayer    │ posti instagrammabili     │ AR sul luogo reale      │
+│ Classifica globale  │ Itinerario personalizzato │ Immagini AI epoche past │
+│ Territorio + decay  │ Filtro per interessi      │ "Scatta e Scopri"       │
+│ Pezzi monumento     │ Mappa posti grigi/colorat │ Carta d'identità città  │
+└─────────────────────┴──────────────────────────┴─────────────────────────┘
+```
+
+---
+
+## Onboarding e Profilo
+
+### Quiz iniziale (alla registrazione)
+Breve quiz gamificato (10 domande, 60 secondi) che calibra subito il profilo:
+- Interessi: arte / storia / food / natura / nightlife / architettura / borghi / shopping
+- Età (fascia)
+- Livello culturale (casual / appassionato / esperto)
+- Lingua (italiano, inglese, francese, spagnolo)
+
+Il quiz non è un form — è già un gioco. Rispondi a domande tipo *"Sei a Roma per un pomeriggio. Scegli: Colosseo o Trastevere?"*. L'AI deduce il profilo dalle scelte.
+
+### Tinder dei Posti (a casa, per affinare il profilo)
+Sessione di swipe su card di luoghi: immagine + nome + categoria.
+- Swipe destra → mi piace, swipe sinistra → non fa per me
+- Più swipe fai, più il profilo diventa preciso
+- L'itinerario generato cambia in base alle preferenze accumulate
+- Funziona anche offline come sessione di "esplora posti" serale
+- Per i gruppi: il sistema interseca le preferenze di tutti i membri → itinerario bilanciato
+
+### Livello Giocatore
+Basato sul numero di posti fisicamente visitati e conquistati:
+- **Livello 1–5** → accesso a POI base (monumenti principali)
+- **Livello 6–15** → si sbloccano POI nascosti (cortili, botteghe storiche, belvedere segreti)
+- **Livello 16+** → posti esclusivi e sfide avanzate, borghi minori classificati
+
+Il livello è globale, non per città — spinge a esplorare posti nuovi ovunque.
+
+---
+
+## Home Screen — UX principale
+
+```
+┌─────────────────────────────────────────────┐
+│  🔍  "Dove andiamo?"          [profilo]  [🔔] │
+├─────────────────────────────────────────────┤
+│  I TUOI VIAGGI                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │ Roma     │  │ Bologna  │  │ + Nuovo  │  │
+│  │ 37% exp. │  │ futuro   │  │ viaggio  │  │
+│  └──────────┘  └──────────┘  └──────────┘  │
+├─────────────────────────────────────────────┤
+│  SCOPRI ORA                                 │
+│  • Sessioni quiz live  (3 attive)           │
+│  • Posti da difendere  (Tivoli scade tra 2g)│
+│  • Suggerimento AI: "Spello è vicina a te" │
+└─────────────────────────────────────────────┘
+```
+
+**Organizza nuovo viaggio:**
+1. Inserisci città (o lascia che l'AI suggerisca in base alla posizione + profilo)
+2. Scegli modalità:
+   - **Solo** — avventura individuale
+   - **Gruppo** — aggiungi compagni di viaggio, il sistema matcha gli interessi
+   - **Unisciti a una sessione** — matchmaking con sconosciuti che visitano la stessa città, abbinati per interessi comuni
+3. Scegli data (viaggio futuro = prepara i pezzi da casa in anticipo)
+
+---
+
+## Modalità di Gioco
+
+### Modalità Solo
+Percorso generato dall'AI al 100% personalizzato sul tuo profilo. Mappa + nebbia di guerra. Conquisti tappe, accumuli monete, costruisci la tua storia della città.
+
+### Modalità Gruppo (compagni noti)
+- Stesso board, tappe assegnate o in competizione
+- Nebbia si apre per tutti quando qualcuno sblocca una tappa (Supabase Realtime)
+- Classifica live durante il viaggio
+- Il sistema interseca i profili → include tappe che soddisfano tutti
+
+### Modalità Sessione Aperta (matchmaking)
+- Sei solo in città ma vuoi giocare con altri
+- Il sistema ti abbina con altri giocatori presenti nella stessa città in quel momento
+- Abbinamento per interessi (non per livello — così i novizi imparano dagli esperti)
+- Ogni membro vive la sua storia ma vede le tappe degli altri sulla mappa
+
+---
+
+## Sistema Territorio e Conquista
+
+### Mappa: Grigio → Colore
+Tutti i POI della città sono visibili sulla mappa fin dall'inizio, ma **grigi** (nebbia sopra di loro). Quando passi fisicamente vicino a un posto (GPS) e completi la tappa → diventa colorato, la nebbia si dissolve. Il colore indica anche lo stato:
+- **Grigio** → non visitato
+- **Colore pieno** → tuo, conquistato di recente
+- **Colore sbiadito** → tuo ma a rischio decay
+- **Colore altrui** → conquistato da un altro giocatore
+
+### Pezzi Monumento — Pre-conquista da Casa
+Ogni POI importante ha 3 "pezzi" collezionabili da casa:
+
+**Come guadagni pezzi:**
+- **Quiz sul posto** → rispondi a domande specifiche su quel luogo (Claude genera)
+- **GeoGuessr Roma** → ti mostra un frammento di un monumento/quartiere a caso, indovina dove sei → pezzo
+
+Quando hai tutti e 3 i pezzi di un POI → il posto è "pre-reclamato". Sulla mappa appare con un'icona speciale. Ma **non è tuo finché non ci vai fisicamente**. Questo è il ponte casa-città: costruisci l'attesa, poi realizzi la conquista sul posto.
+
+### Piazza il Tuo Monumento
+Quando conquisti fisicamente un posto (GPS verificato), puoi:
+- **Conquistarlo gratis** → il posto è tuo per 7 giorni, difendibile con quiz da casa
+- **Pagare monete per personalizzarlo** → piazzi il tuo "monumento" personale (avatar, nome, frase) visibile a tutti i giocatori che visitano quel posto
+
+**Il Monumento porta valore:**
+- Altri giocatori che arrivano sul posto vedono il tuo monumento
+- Possono "salutarti" (like) → tu guadagni monete passive
+- Il quiz che fanno sul posto **lo scegli tu** (tra quelli generati dall'AI) — sei tu il padrone di casa
+- Più saluti ricevi, più monete accumuli anche senza giocare attivamente
+
+### Decay e Difesa
+La proprietà dura **1 settimana**. Poi:
+- **Da casa**: fai un quiz specifico su quel posto → rinnovi per un'altra settimana
+- **In città**: torni fisicamente → rinnovi + guadagni bonus monete
+- **Se non difendi**: il posto torna grigio e contendibile
+
+**Achievement per continuità:**
+- "Guardiano" → difesa per 2 settimane consecutive
+- "Custode" → 1 mese consecutivo
+- "Leggenda" → 3 mesi (praticamente imbattibile, motiva il ritorno fisico)
+
+**Vecchi proprietari**: ogni posto conserva la storia di chi lo ha posseduto. Nel profilo hai:
+- **Proprietà attive** — posti che possiedi ora
+- **Proprietà passate** — tutti i posti che hai mai conquistato, con date
+
+### Il Ciclo Casa ↔ Città
+
+```
+[A CASA]
+Swipe Tinder posti → affini profilo
+Quiz Colosseo → accumuli pezzi
+Sessione quiz live → guadagni monete
+Difendi Tivoli con quiz → rinnovi proprietà
+        ↓ (il gioco crea urgenza di uscire)
+[IN CITTÀ]
+GPS sblocca tappa → nebbia si dissolve
+Completi 3 pezzi Colosseo → lo conquisti
+Piazzi il tuo monumento (monete) → guadagno passivo
+Visiti posto altrui → fai il quiz del proprietario
+        ↓ (torni a casa con nuovo territorio da difendere)
+[A CASA — ritorno]
+Decay Tivoli tra 5 giorni → devo tornare o fare quiz
+Nuova città suggerita dall'AI → nuovo ciclo
+```
+
+---
+
+## Meccaniche di Gioco
+
+### Board di Esplorazione
+10–15 tappe per partita, generate dall'AI in base al profilo. Visibili sulla mappa come percorso. Caselle tipo:
+- **Tappa Storia** → micro-storia narrata dall'AI (ElevenLabs voce)
+- **Quiz** → domanda a scelta multipla, difficoltà adattiva al livello
+- **Sfida Locale** → "trova una bottega storica in questo quartiere"
+- **Curiosità Nascosta** → fatto sorprendente, la città sotto la superficie
+- **Connessione** → link tra due luoghi lontani nel tempo ma vicini nel senso
+- **Sfida AR** → in Modalità Campo, inquadra il luogo con la fotocamera per sbloccare
+- **GeoGuessr** → "indovina in che quartiere sei" con frammento di monumento
+
+### Sessioni Quiz Online (a casa)
+Lobby pubblica o privata (codice stanza), 2–8 giocatori, domande generate da Claude su una città. Come Kahoot ma il contenuto è generato live e personalizzato. Monete proporzionali al punteggio. È la modalità che tiene vivo il gioco senza uscire.
+
+### Itinerario AI
+L'app non è solo gioco — genera anche un **itinerario pratico** per la città:
+- Come spostarsi (trasporti, piedi, bici) tra le tappe
+- Orari di apertura (da OSM + Google Places API)
+- Stima tempi
+- Filtrato per le preferenze del profilo (niente musei se hai swipato sinistra su tutti)
+
+### Guida Città — Sezione Scopri
+Sezione non-gioco dell'app, navigabile liberamente:
+- **Posti instagrammabili** (tag OSM + curazione AI)
+- **Ristoranti e food** per categoria (Claude genera descrizione + perché fa per te)
+- **Vita notturna** (discoteche, bar, eventi)
+- **Musei e cultura** con info biglietti
+- **Biblioteche, spazi studio, coworking**
+- Tutti i posti anche qui appaiono grigi se non visitati, colorati se già esplorati — la mappa è unica
+
+---
+
+## Feature Tecnologiche Differenzianti
+
+### Linea Temporale con Immagini AI Generate
+Timeline orizzontale su ogni tappa:
+```
+[100 d.C.] → [1200] → [1800] → [1950] → [Oggi]
+ DALL-E 3    DALL-E 3  foto epoca  foto    Street View
+```
+Claude genera il prompt storico → DALL-E 3 genera l'immagine → cachata in DB.
+Esempio: *"Il Foro Romano nel 100 d.C., fotorealistico, luce tramonto, romani in toga, colonne integre"*
+
+### AR "Occhio del Tempo" (Modalità Campo)
+Punti la fotocamera verso un edificio. L'AR sovrappone:
+- Layer storico: immagine AI del luogo nell'epoca passata
+- Personaggi storici come overlay animati
+- Quiz flottanti che emergono dal luogo reale
+- Frecce AR verso dettagli nascosti (date, stemmi, simboli)
+
+### "Scatta e Scopri" — Vision Challenge (MVP AR)
+Sfida fotografica: *"Trova e fotografa qualcosa di circolare su questo edificio"*. Claude Vision analizza la foto e conferma. Non guardi il telefono — guardi la città.
+
+### Narratore Vocale (ElevenLabs)
+Ogni micro-storia letta da una voce generata. Tono adattivo al profilo (bambino → voce calda, esperto → voce densa). Voce-personaggio diversa per città (Roma solenne, Napoli vivace). In auricolare mentre si cammina — la città parla senza guardare lo schermo.
+
+### Giocatori Attivi in Tempo Reale
+Dot animati sulla mappa: "3 persone stanno esplorando Roma ora", "1 a Civita di Bagnoregio". Supabase Realtime, presenza anonima aggregata, TTL 5 minuti.
+
+### Borghi Italiani — Copertura Capillare
+Funziona per qualsiasi comune italiano, anche sotto i 500 abitanti. OSM + Wikidata coprono tutto. Dove Wikipedia è scarna, Claude genera contenuto dai dati strutturati (coordinate, anno fondazione, monumenti censiti). Un borgo delle Marche diventa un'avventura unica — anzi di più, perché nessuno lo conosce già.
+
+### Micro-turismo e Turismo di Prossimità
+Il decay del territorio è il motore. Non una notifica push — è la mappa che mostra il tuo colore che sbiadisce, qualcuno che si avvicina al tuo borgo. Tivoli è a 30 km da Roma. Spello a 2 ore. Il gioco crea urgenza narrativa per andare dove normalmente non si andrebbe. Questo è il pitch per comuni e pro loco: promozione territoriale che funziona perché il giocatore è già motivato internamente.
+
+---
+
+## Classifiche
+
+- **Globale** — top player per punti totali
+- **Per città** — chi domina Roma, chi domina Napoli
+- **Borghi** — territori unici conquistati (incentiva posti meno noti)
+- **Guardiani** — chi mantiene il territorio più a lungo
+- **Quiz Settimanale** — reset ogni lunedì, sempre fresca e competitiva
+- **Revenue passiva** — chi genera più monete dai saluti sul proprio monumento
+
+Tutte alimentate da view materializzate in Supabase. Aggiornamento Realtime, nessun polling.
+
+---
+
+## Stack Tecnico
 
 ### Frontend (Web + Mobile — unica codebase)
-- **Next.js 15** (App Router) + **React** → PWA installabile su mobile, funziona su PC e smartphone
-- **TailwindCSS** + **Framer Motion** → UI game-feel, animazioni fluide
-- **Leaflet.js** → mappa interattiva open-source (no costi)
-- **Geolocation API** del browser → per Modalità Campo
-- **AR.js** + **A-Frame** → realtà aumentata web-based, zero app da installare, funziona via browser
-- **WebXR API** → standard browser per esperienze AR/VR su mobile moderno
-- **MindAR.js** → image tracking per riconoscimento visivo di luoghi/targhe/monumenti
+- **Next.js 15** (App Router) + **React** → PWA installabile su mobile, funziona su PC
+- **TailwindCSS** + **Framer Motion** → UI game-feel, animazioni nebbia, transizioni mappa
+- **Leaflet.js** → mappa interattiva open-source, layer canvas per nebbia di guerra
+- **Geolocation API** → verifica presenza fisica per conquiste
+- **AR.js** + **A-Frame** → AR web-based, zero installazione
+- **MindAR.js** → riconoscimento visivo luoghi/targhe
+- **MediaDevices API** → fotocamera per "Scatta e Scopri"
 
 ### Backend / API
-- **FastAPI** (Python) → logica di gioco, generazione contenuti AI, endpoint game engine
-- **Supabase** → PostgreSQL + Auth + Realtime subscriptions
+- **FastAPI** (Python) → logica di gioco, AI engine, gestione sessioni quiz
+- **Supabase** → PostgreSQL + Auth (email + Google OAuth) + Realtime
 
-### Registrazione utenti: Supabase, non backend custom
-Supabase gestisce tutto: signup/login (email, Google OAuth), sessioni JWT, profili utente, score, classifica. **Non serve scrivere codice di autenticazione**. FastAPI riceve il JWT Supabase e lo verifica — nessun sistema auth duplicato. Il realtime di Supabase gestisce la classifica live e il sync del team senza WebSocket custom.
+> **Registrazione: Supabase, non backend custom.** Auth, sessioni JWT, profili, monete, classifica — tutto Supabase. FastAPI riceve il JWT e lo verifica con la chiave pubblica. Zero codice auth da scrivere.
 
 ### AI Layer
-- **Claude API (Anthropic)** → generazione quiz, micro-storie, adattamento al profilo, narrativa, Vision per sfide foto
-- **DALL-E 3 (OpenAI)** → generazione immagini storiche del luogo per la linea temporale (stesso posto in epoche diverse)
-- **Wikipedia REST API** + **Wikidata** → fonte dati affidabile e gratuita per i luoghi
-- **Overpass API (OpenStreetMap)** → POI della città, borghi, frazioni (anche comuni sotto 1.000 abitanti)
-- **ISTAT open data** + **Touring Club Italiano dataset** → copertura borghi italiani minori non su Wikipedia
-
-### Audio
-- **ElevenLabs API** → voce generata per micro-storie, curiosità e narrazione delle tappe. Ogni città può avere un narratore con voce e tono diversi (es. voce antica e solenne per Roma, vivace e ironica per Napoli). Supporto multilingua nativo.
+- **Claude API** → quiz, micro-storie, narrativa, Vision per sfide foto, prompt DALL-E, itinerari
+- **DALL-E 3 (OpenAI)** → immagini storiche per la linea temporale
+- **ElevenLabs API** → text-to-speech adattivo, stream diretto nel browser
+- **Wikipedia REST API** + **Wikidata** → fonte dati verificabile
+- **Overpass API (OSM)** → POI di qualsiasi comune italiano
+- **ISTAT open data** → copertura borghi minori non su Wikipedia
 
 ### Infrastruttura
-- **Vercel** → deploy Next.js istantaneo
-- **Railway** o **Render** → deploy FastAPI
+- **Vercel** → deploy Next.js
+- **Railway** → deploy FastAPI
 
 ---
 
-## Architettura del sistema
+## Architettura del Sistema
 
 ```
-[Utente sceglie città + compila profilo]
+[Registrazione + Quiz profilo iniziale]
+            ↓
+    [Profilo Engine]
+    Interessi, livello, lingua, swipe history
             ↓
     [City Generator]
-    OSM + Wikipedia → lista POI bilanciata
-    (storia, arte, food, natura, nightlife, botteghe)
+    OSM + Wikipedia + Wikidata → POI bilanciati per profilo
+    (storia, arte, food, natura, nightlife, borghi, instagrammabili)
             ↓
     [Personalization Engine]
-    Filtra e ordina i POI per il profilo specifico
-    (età, interessi, lingua, livello culturale)
+    Filtra per livello giocatore + interessi + swipe history
+    Per gruppi: intersezione profili → tappe condivise
             ↓
     [Game Board Generator]
-    Trasforma i POI in tappe del gioco (board Gioco dell'Oca)
-    con caselle speciali: sfida, storia, quiz, bonus locale
+    Board + itinerario pratico (percorso, tempi, trasporti)
             ↓
-    [Claude AI Engine]  ← cuore del sistema
-    Per ogni tappa genera:
-    - Quiz (3 livelli difficoltà)
-    - Micro-storia contestuale (200-300 parole)
-    - Curiosità nascosta ("lo sapevi che...")
-    - Connessione narrativa con la tappa precedente
+    [Claude AI Engine]  ← cuore
+    Per ogni tappa:
+    - Quiz adattativi (3 difficoltà)
+    - Micro-storia + prompt ElevenLabs
+    - Prompt DALL-E per linea temporale
+    - Curiosità nascosta
+    - Connessione narrativa con tappa precedente
             ↓
     [Game Loop]
-    Il giocatore avanza, risponde, scopre, accumula punti
-    In Modalità Campo: GPS verifica presenza fisica → bonus
+    GPS → sblocco fisico → conquista territorio
+    Mappa: grigio → colore, nebbia → dissolve
+    Monete, pezzi, achievement
             ↓
-    [AR Layer]  ← si attiva in Modalità Campo
-    Fotocamera inquadra il luogo → overlay AR con info,
-    quiz flottanti, personaggi storici, strato temporale
-    Claude Vision analizza la foto → risposta contestuale
+    [AR Layer] (Modalità Campo)
+    Fotocamera → Claude Vision → sfida confermata
+    A-Frame → overlay storico sul luogo reale
 ```
 
 ---
 
-## Economia di gioco — il ciclo casa ↔ città
+## Schema Database Supabase
 
-Questo è il cuore del retention loop. Le due modalità non sono separate: si alimentano a vicenda.
-
+```sql
+users               → id, email, display_name, avatar, level, created_at
+profiles            → user_id, age_range, interests[], language, cultural_level
+swipe_history       → user_id, poi_id, liked, created_at
+games               → id, city, board_json, mode (solo/group/open), created_at
+game_players        → game_id, user_id, score, unlocked_pois[], completed_at
+teams               → id, room_code, game_id, name
+team_members        → team_id, user_id
+territories         → user_id, poi_id, conquered_at, last_defended_at, tier(1/2/3), weeks_held
+territory_history   → poi_id, user_id, from_date, to_date  ← vecchi proprietari
+monuments           → user_id, poi_id, label, avatar_url, quiz_id_chosen, active
+monument_likes      → monument_id, from_user_id, created_at  ← "saluti"
+poi_pieces          → user_id, poi_id, pieces_collected(0-3)
+coins               → user_id, balance, lifetime_earned
+coin_transactions   → user_id, amount, reason, ref_id, created_at
+quiz_sessions       → id, room_code, city, host_user_id, status, created_at
+quiz_session_players → session_id, user_id, score, coins_earned
+quiz_results        → user_id, poi_id, correct, time_ms, created_at
+presence            → user_id, city_slug, last_seen  (TTL 5 min)
+temporal_images     → poi_id, era_label, image_url, dalle_prompt, created_at  ← cache
+leaderboard         → (view materializzata) user_id, city, total_score, territories_held
 ```
-[IN CITTÀ - Campo]                    [A CASA - Divano]
-Esplori → conquisti territorio   ←→   Quiz online → guadagni monete
-Spendi monete per bonus          ←→   Difendi territorio conquistato
-Perdi territorio se non torni   ←→   Scopri nuovi borghi da visitare
-```
-
-### Monete (valuta di gioco)
-Guadagnate **a casa** attraverso:
-- Sessioni quiz online con altri giocatori (punteggio → monete)
-- Mantenimento del territorio già conquistato (quiz sul posto specifico)
-- Sfide giornaliere e settimanali
-
-Spese **in città** per:
-- Sbloccare un suggerimento su una tappa difficile
-- Attivare il "boost narratore" (ElevenLabs con voce speciale)
-- Accedere a tappe segrete non presenti nel percorso base
-- Rivendicare un territorio conteso
-
-### Territorio e Decay
-Ogni tappa conquistata fisicamente diventa **territorio del giocatore**, visibile sulla mappa con il suo colore. Ma il territorio decade nel tempo se non viene mantenuto:
-
-- **Tier 1 — Stabile** (7 giorni): fai un quiz sulla tappa da casa, il territorio è confermato
-- **Tier 2 — A rischio** (14 giorni senza azione): la nebbia ricomincia a coprire il bordo
-- **Tier 3 — Contendibile** (21+ giorni): altri giocatori possono "sfidare" il territorio da casa con un quiz
-
-Questo meccanismo vale soprattutto per i **borghi minori**: se sei l'unico che ha visitato Civita di Bagnoregio, sei il "Guardiano" di quel borgo — un titolo unico. Ma devi tornare (o difendere da casa) altrimenti qualcun altro te lo porta via.
-
-### Micro-turismo e turismo di prossimità
-Il decay del territorio è il motore del micro-turismo. Il giocatore a Roma vede sulla mappa che ha conquistato Tivoli 3 settimane fa e sta per perderla. Tivoli è a 30 km. Ci torna per un pomeriggio. Non per fare il turista — per difendere il suo territorio. Il gioco trasforma un borgo ignorato in una destinazione con urgenza narrativa.
 
 ---
 
-## Meccaniche di gioco
-
-### Board
-- 10-15 tappe per partita (non troppe, non banali)
-- Caselle tipo:
-  - **Tappa Storia** → micro-storia narrata dall'AI
-  - **Quiz** → domanda a scelta multipla, difficoltà adattiva
-  - **Sfida Locale** → "trova una bottega storica in questo quartiere"
-  - **Curiosità Nascosta** → fatto sorprendente, la città sotto la superficie
-  - **Connessione** → link tra due luoghi lontani nel tempo ma vicini nel senso
-  - **Sfida AR** → in Modalità Campo, inquadra il luogo con la fotocamera per sbloccare la tappa
-  - **Quiz Generale** → domande sulla città non legate a una tappa specifica, usabili come warmup o sfida rapida standalone
-
-### Profilo giocatore (onboarding rapido)
-- Età (fascia)
-- Interessi (arte / storia / food / natura / nightlife / architettura)
-- Lingua (italiano, inglese, francese, spagnolo — Claude multilingue nativo)
-- Livello culturale (casual / appassionato / esperto)
-
-### Progressione e Mappa Nebbia di Guerra
-La mappa della città parte **completamente coperta da nuvole**. Ogni tappa sbloccata apre la nebbia in quell'area con un'animazione (nuvole che si dissolvono, territorio che emerge). Il progresso è visivo e immediato: vedi quanto hai esplorato vs quanto resta nascosto.
-
-- Punti "Spirito del Luogo" accumulati per ogni tappa
-- Percentuale città esplorata visibile sulla mappa (es. "37% sbloccato")
-- Badge tematici (es. "Storico", "Foodie", "Esploratore")
-- Al termine: **Carta d'Identità della Città** — un riassunto narrativo personalizzato dell'avventura vissuta
-
-Tecnicamente: layer canvas/SVG su Leaflet con celle esagonali o a griglia, opacity 1 → 0 con CSS transition per ogni cella sbloccata. Nessuna libreria extra necessaria.
-
-### Modalità Team
-- Il creatore apre una **stanza** (codice a 4 lettere, come Kahoot)
-- I membri si uniscono → vedono la stessa mappa, ma ognuno può prendere tappe diverse
-- La nebbia si apre in tempo reale per tutti quando qualcuno sblocca una tappa (Supabase Realtime)
-- Classifica live in-game durante la partita
-
-### Sessioni Quiz Online (modalità casa)
-Lobby pubblica o privata (codice stanza), 2-8 giocatori, domande generate da Claude su una città scelta. Funziona come Kahoot ma il contenuto è generato live e personalizzato. Al termine: monete proporzionali al punteggio. È la modalità che tiene vivo il gioco nei giorni in cui non si esce.
-
-### Classifiche
-- **Classifica Globale** — top player per punti totali
-- **Classifica per Città** — chi domina Roma, chi domina Napoli
-- **Classifica Borghi** — territori unici conquistati (incentiva i posti meno noti)
-- **Classifica Guardiani** — chi mantiene il territorio più a lungo su un singolo posto
-- **Classifica Quiz Settimanale** — reset ogni lunedì, sempre competitiva
-- Aggiornamento real-time via Supabase Realtime, nessun polling
-
----
-
-## Feature differenzianti (wow factor per la giuria)
-
-### 1. "Lo Spirito del Luogo"
-Ogni città ha un filo narrativo invisibile che l'AI costruisce all'inizio e svela progressivamente tappa per tappa. Non una guida: una storia che emerge.
-
-### 2. Layer Botteghe / Commercio Locale
-Tra le tappe possono apparire botteghe storiche, mercati, artigiani — non come pubblicità, ma come parte del DNA urbano. Connette cultura e territorio reale.
-
-### 3. Linea Temporale con Immagini AI Generate
-Lo stesso luogo in epoche diverse, mostrato visivamente. Claude genera la descrizione storica del posto → DALL-E 3 genera l'immagine di quel luogo nell'epoca specificata. Il giocatore scorre una timeline orizzontale:
-
-```
-[Roma 100 d.C.] → [1200 d.C.] → [1800] → [1950] → [Oggi]
-   (immagine AI)    (immagine AI)  (foto d'epoca)  (foto)  (Street View)
-```
-
-Il prompt a DALL-E viene costruito da Claude: *"Il Foro Romano nel 100 d.C., fotorealistico, luce del tramonto, romani in toga, colonne integre, architettura imperiale romana"*. L'immagine generata appare come illustrazione della tappa — non clip art, ma una ricostruzione visiva credibile. Differenziatore fortissimo rispetto a qualsiasi guida turistica esistente.
-
-### 4. Multiplayer asincrono
-Più giocatori, stessa città, board diversa. Alla fine si confrontano le "versioni" della città che hanno scoperto — ognuno ha vissuto un pezzo diverso.
-
-### 5. Micro-turismo e turismo di prossimità — il loop narrativo
-Il territorio che decade è il miglior motore di micro-turismo mai inventato. Non è una notifica push che dice "torna a visitare Roma". È la mappa che mostra il tuo territorio che si restringe, il tuo colore che sbiadisce, un'altra persona che si avvicina al tuo borgo preferito. Civita di Bagnoregio, Matera vecchia, Bobbio, Spello — posti a 1-2 ore da casa di milioni di italiani, mai visitati perché "non c'è motivo urgente". Il gioco crea il motivo. Questo è il messaggio da vendere anche ai comuni e alle pro loco: Play The City è promozione territoriale che funziona perché il giocatore è già motivato.
-
-### 6. Borghi Italiani — copertura capillare
-Il sistema non si limita a Roma, Milano, Firenze. Funziona per qualsiasi comune italiano, anche quelli sotto i 500 abitanti. OSM ha dati su ogni borgo, Wikidata copre anche i comuni minori. Per i luoghi dove Wikipedia è scarna, Claude genera il contenuto a partire dai dati strutturati di Wikidata (coordinate, popolazione, anno di fondazione, monumenti censiti). Un borgo sperduto delle Marche diventa un'avventura unica quanto il Colosseo — anzi di più, perché nessuno lo conosce già.
-
-### 6. Giocatori Attivi in Tempo Reale sulla Mappa
-Nella schermata della mappa (sia in Modalità Divano che Campo) appaiono **dot animati** che mostrano dove altri giocatori stanno esplorando in questo momento. "3 persone stanno giocando a Roma adesso", "1 giocatore a Civita di Bagnoregio". Effetto community immediato — la città non è mai vuota, c'è sempre qualcuno che la sta scoprendo. Tecnicamente: Supabase Realtime + presenza anonima (no dati personali, solo città/quartiere aggregato). Si aggiorna ogni 30 secondi.
-
-### 7. Verified Source Layer
-Ogni contenuto mostra la fonte (Wikipedia, Wikidata, OSM) con link. Affidabilità visibile, non dichiarata.
-
-### 8. AR "Occhio del Tempo" (flagship feature)
-In Modalità Campo, punti la fotocamera verso un edificio o una piazza. L'AR sovrappone:
-- **Layer storico**: come appariva quel luogo 100/500 anni fa (immagini d'epoca + narrazione AI)
-- **Personaggi contestuali**: figure storiche legate al luogo appaiono come overlay animati
-- **Quiz flottanti**: domande che emergono dal luogo reale inquadrato
-- **Dettagli nascosti**: frecce AR che indicano elementi architettonici da cercare (una data, uno stemma, un simbolo)
-
-Tecnicamente: AR.js per location-based + Claude Vision API per analizzare la foto scattata e generare contenuto contestuale in tempo reale.
-
-### 9. Narratore Vocale Personalizzato (ElevenLabs)
-Ogni micro-storia e curiosità viene letta da una voce generata da ElevenLabs. Il narratore non è generico: l'AI sceglie tono e registro in base al profilo del giocatore (bambino → voce calda e semplice, esperto → voce colta e densa). La voce del narratore diventa il "personaggio" della partita — la città parla direttamente al giocatore mentre esplora. In Modalità Campo funziona in auricolare mentre si cammina: si sente la storia del luogo senza guardare lo schermo.
-
-### 10. "Scatta e Scopri" — Vision Challenge
-Il giocatore riceve una sfida: *"Trova e fotografa qualcosa di circolare su questo edificio"*. Scatta la foto, Claude Vision la analizza e conferma se la sfida è completata. Gamification sensoriale reale: non guardi il telefono, guardi la città.
-
----
-
-## MVP per l'hackathon (scope realistico)
+## MVP per l'Hackathon (scope realistico)
 
 **Cosa dimostrare in demo:**
+1. Onboarding con quiz profilo → 60 secondi
+2. Home screen con "Dove andiamo?" → scegli Roma
+3. Mappa con nebbia di guerra → POI grigi che diventano colorati
+4. Board generata con 8 tappe diverse per due profili diversi
+5. Almeno 3 tipi di casella funzionanti: Quiz, Micro-storia (ElevenLabs), Linea Temporale (DALL-E)
+6. "Scatta e Scopri" con fotocamera → Claude Vision risponde
+7. Classifica globale live
+8. Funzionante in italiano e inglese, mobile-first
 
-1. Onboarding → inserisci città + profilo in 30 secondi
-2. Board generata → 8-10 tappe visualizzate su mappa + board grafica
-3. Almeno 3 tipi di casella funzionanti (Quiz, Micro-storia, Curiosità)
-4. Contenuto realmente diverso tra due profili diversi sulla stessa città
-5. Funzionante in italiano e inglese
-6. UI mobile-friendly (PWA)
-
-**Schema database Supabase (tabelle principali):**
-```
-users          → id, email, display_name, avatar, created_at
-profiles       → user_id, age_range, interests[], language, cultural_level
-games          → id, city, board_json, created_at
-game_players   → game_id, user_id, score, unlocked_pois[], completed_at
-teams          → id, room_code, game_id, name
-team_members   → team_id, user_id
-leaderboard       → user_id, city, total_score, pois_unlocked (view materializzata)
-quiz_results      → user_id, poi_id, correct, time_ms, created_at
-presence          → user_id, city_slug, last_seen (TTL 5 min)
-temporal_images   → poi_id, era_label, image_url, dalle_prompt, created_at (cache)
-territories       → user_id, poi_id, conquered_at, last_defended_at, tier (1/2/3)
-coins             → user_id, balance, lifetime_earned
-coin_transactions → user_id, amount, reason, created_at
-quiz_sessions     → id, room_code, city, host_user_id, status, created_at
-quiz_session_players → session_id, user_id, score, coins_earned
-```
-
-**Cosa lasciare fuori dal MVP:**
-- GPS reale in Modalità Campo (si mostra il wireframe/mockup)
-- AR location-based completa (si dimostra la Vision Challenge che è più d'impatto e fattibile)
-- Classifica team (si fa la classifica globale e per città, il team si racconta)
-
-**Per l'AR nel MVP — focus su "Scatta e Scopri":**
-- Apri fotocamera nel browser (MediaDevices API, nativa nei browser moderni)
-- Scatta foto della tappa quando sei in Modalità Campo
-- Invia a Claude Vision API → conferma sfida + genera commento personalizzato
-- Nessuna libreria AR pesante necessaria per la demo: impatto visivo garantito con implementazione rapida
+**Cosa si racconta ma non si costruisce:**
+- GPS reale (mockato in demo con posizione fissa)
+- Sistema pezzi + monumento (si mostra wireframe)
+- Matchmaking sessione aperta (si racconta il loop)
+- Decay settimanale (si mostra la UI ma senza cron job reale)
 
 ---
 
-## Messaggio per la giuria
-
-> Il turismo di massa è finito. La Gen Z non vuole la guida turistica — vuole giocare, scoprire, connettersi. Play The City non usa l'AI per generare testo: la usa per costruire connessioni nascoste tra luoghi, persone e storia. La città non è uno sfondo — è il personaggio principale.
-
----
-
-## Struttura repo (proposta)
+## Struttura Repo
 
 ```
 /
-├── frontend/          # Next.js PWA
+├── frontend/
 │   ├── app/
-│   │   ├── page.tsx           # onboarding / home
-│   │   ├── board/[gameId]/    # board di gioco
-│   │   └── tappa/[poiId]/     # scheda tappa + AR
+│   │   ├── page.tsx                  # home — "Dove andiamo?"
+│   │   ├── onboarding/               # quiz profilo iniziale
+│   │   ├── swipe/                    # Tinder dei posti
+│   │   ├── board/[gameId]/           # board di gioco
+│   │   ├── tappa/[poiId]/            # scheda tappa + timeline + AR
+│   │   ├── territorio/               # mappa proprietà + decay
+│   │   ├── quiz-live/[roomCode]/     # sessione quiz multiplayer
+│   │   ├── scopri/                   # guida città (non-game)
+│   │   └── profilo/                  # proprietà attive/passive, achievements
 │   └── components/
-│       ├── GameBoard.tsx
-│       ├── TappaCard.tsx
-│       ├── QuizModal.tsx
-│       ├── ARCamera.tsx        # fotocamera + invio foto a Claude Vision
-│       └── AROverlay.tsx       # overlay AR su stream fotocamera (A-Frame/AR.js)
-├── backend/           # FastAPI
+│       ├── Map/FogOfWar.tsx          # layer nebbia su Leaflet
+│       ├── Map/ActivePlayers.tsx     # dot giocatori in tempo reale
+│       ├── Board/GameBoard.tsx
+│       ├── Board/TappaCard.tsx
+│       ├── Board/QuizModal.tsx
+│       ├── Timeline/TemporalSlider.tsx # slider epoche + immagini DALL-E
+│       ├── AR/ARCamera.tsx           # fotocamera + Claude Vision
+│       ├── AR/AROverlay.tsx          # overlay A-Frame
+│       ├── Swipe/PlaceCard.tsx       # card Tinder dei posti
+│       └── Audio/NarratorPlayer.tsx  # ElevenLabs audio stream
+├── backend/
 │   ├── main.py
-│   ├── city_generator.py      # OSM + Wikipedia → POI
-│   ├── personalization.py     # filtraggio per profilo
-│   ├── ai_engine.py           # chiamate Claude API (testo + vision)
-│   ├── vision_engine.py       # analisi foto con Claude Vision → conferma sfide
-│   ├── audio_engine.py        # testo → ElevenLabs → audio stream per ogni tappa
-│   ├── image_engine.py        # Claude genera prompt → DALL-E 3 → immagine storica per linea temporale
-│   ├── presence_engine.py     # giocatori attivi ora per città (Supabase Realtime)
-│   ├── territory_engine.py    # calcolo decay territorio, tier, sfide
-│   ├── coin_engine.py         # economia monete: earn/spend/transazioni
-│   ├── quiz_session.py        # sessioni quiz multiplayer online (lobby + sync)
-│   └── game_builder.py        # assembla il game object
+│   ├── city_generator.py             # OSM + Wikipedia + Wikidata → POI
+│   ├── personalization.py            # filtraggio profilo + matching gruppo
+│   ├── ai_engine.py                  # Claude API (testo + vision)
+│   ├── image_engine.py               # Claude prompt → DALL-E 3 → cache
+│   ├── audio_engine.py               # testo → ElevenLabs stream
+│   ├── vision_engine.py              # Claude Vision → conferma sfide foto
+│   ├── territory_engine.py           # decay, tier, sfide, vecchi proprietari
+│   ├── coin_engine.py                # earn/spend/transazioni monete
+│   ├── quiz_session.py               # lobby multiplayer (Supabase Realtime)
+│   ├── presence_engine.py            # giocatori attivi ora per città
+│   └── game_builder.py               # assembla il game object completo
 └── idea.md
 ```
+
+---
+
+## Messaggio per la Giuria
+
+> Il turismo di massa è finito. La Gen Z non vuole la guida — vuole giocare, conquistare, difendere. Play The City non usa l'AI per generare testo: la usa per costruire connessioni nascoste tra luoghi, persone e storia. Il territorio che decade dopo una settimana non è un dark pattern — è il motivo per cui il giocatore torna a Tivoli di sabato pomeriggio. Quel borgo ignorato che nessuno visita? Ora ha un Guardiano. E il Guardiano ci torna.
