@@ -8,9 +8,7 @@ from app.models import (
 from app.auth import get_optional_user
 from app.services.ai import generate_quiz, generate_story, generate_curiosity, generate_connection, rank_pois
 from app.db import supabase
-from app.routers.city import build_overpass_query, parse_overpass, enrich_with_wikipedia
-
-import httpx
+from app.routers.city import build_overpass_query, parse_overpass, enrich_with_wikipedia, fetch_overpass
 
 router = APIRouter(prefix="/api/game", tags=["game"])
 
@@ -49,13 +47,9 @@ async def create_game(req: CreateGameRequest, user_id: str | None = Depends(get_
     """Create a complete game board for a city. Orchestrates all AI agents."""
     city_slug = _slug(req.city)
 
-    # Step 1: Fetch POIs from OSM
+    # Step 1: Fetch POIs from OSM (with mirror fallback)
     query = build_overpass_query(req.city)
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post("https://overpass-api.de/api/interpreter", data={"data": query})
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Errore caricamento POI città")
-        data = resp.json()
+    data = await fetch_overpass(query)
 
     raw_pois = parse_overpass(data)
     raw_pois = await enrich_with_wikipedia(raw_pois)
