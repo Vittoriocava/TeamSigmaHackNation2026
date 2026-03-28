@@ -32,3 +32,15 @@ def get_current_user(request: Request) -> str:
     """FastAPI dependency — extracts and verifies user_id from JWT."""
     token = get_token_from_header(request)
     return verify_token(token)
+
+
+def get_optional_user(request: Request) -> str | None:
+    """FastAPI dependency — returns user_id or None (no 401)."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[7:]
+    try:
+        return verify_token(token)
+    except Exception:
+        return None

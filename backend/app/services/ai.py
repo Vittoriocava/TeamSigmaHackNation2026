@@ -28,10 +28,6 @@ def _vision_model() -> str:
     return get_settings().regolo_vision_model
 
 
-def _image_model() -> str:
-    return get_settings().regolo_image_model
-
-
 def _lang(profile: UserProfile) -> str:
     langs = {"it": "italiano", "en": "English", "fr": "français", "es": "español"}
     return langs.get(profile.language, "italiano")
@@ -76,7 +72,7 @@ Rispondi SOLO con JSON valido:
   "source": "fonte verificabile"
 }}"""
 
-    text = _chat([{"role": "user", "content": prompt}], max_tokens=500)
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=500)
     start = text.find("{")
     end = text.rfind("}") + 1
     data = json.loads(text[start:end])
@@ -89,7 +85,6 @@ async def generate_story(poi: POI, profile: UserProfile, city: str) -> str:
     prompt = f"""Sei il narratore di Play The City. Genera una micro-storia coinvolgente per:
 Luogo: {poi.name} a {city}
 Descrizione: {poi.description}
-Wikipedia: {poi.wikipedia_url}
 
 Profilo giocatore: interessi {profile.interests}, livello {profile.cultural_level}
 Lingua: {_lang(profile)}
@@ -101,7 +96,7 @@ Regole:
 - Includi un fatto sorprendente poco noto
 - Chiudi con una connessione emotiva o una domanda retorica"""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=600)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=600)
 
 
 async def generate_curiosity(poi: POI, profile: UserProfile) -> str:
@@ -113,7 +108,7 @@ Livello: {profile.cultural_level}
 
 Max 80 parole. Tono: "lo sapevi che...?" coinvolgente."""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=200)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=200)
 
 
 async def generate_connection(poi1: POI, poi2: POI, profile: UserProfile) -> str:
@@ -125,7 +120,7 @@ La connessione può essere storica, artistica, leggendaria o urbana.
 Lingua: {_lang(profile)}
 Max 100 parole. Tono narrativo, come se stessi svelando un segreto."""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=250)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=250)
 
 
 async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
@@ -135,23 +130,25 @@ async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
         user_text += f"\nIl luogo atteso è: {poi.name}. Conferma se corrisponde."
 
     client = get_client()
-    response = client.chat.completions.create(
-        model=_vision_model(),
-        max_tokens=300,
-        messages=[
-            {"role": "system", "content": system_msg},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
-                    },
-                    {"type": "text", "text": user_text},
-                ],
-            },
-        ],
-    )
+    loop = asyncio.get_event_loop()
+
+    def _call():
+        return client.chat.completions.create(
+            model=_vision_model(),
+            max_tokens=300,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
+                        {"type": "text", "text": user_text},
+                    ],
+                },
+            ],
+        )
+
+    response = await loop.run_in_executor(None, _call)
     text = response.choices[0].message.content
     start = text.find("{")
     end = text.rfind("}") + 1
@@ -164,7 +161,7 @@ Il prompt deve produrre un'immagine fotorealistica, prospettiva frontale, luce n
 Includi dettagli storici accurati: architettura, persone, vestiti, atmosfera dell'epoca.
 Rispondi SOLO con il prompt in inglese, nient'altro. Max 200 parole."""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=300)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
 
 
 async def rank_pois(
@@ -190,7 +187,7 @@ POI da valutare:
 Rispondi SOLO con un JSON array di oggetti con i campi originali + quelli nuovi.
 Ordina per relevance_score decrescente."""
 
-    text = _chat([{"role": "user", "content": prompt}], max_tokens=4000)
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=4000)
     start = text.find("[")
     end = text.rfind("]") + 1
     return json.loads(text[start:end])
