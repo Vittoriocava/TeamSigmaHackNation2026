@@ -40,7 +40,7 @@ def _lang(profile: UserProfile) -> str:
 
 def _strip_thinking(text: str) -> str:
     """Remove <think>...</think> blocks emitted by reasoning models (e.g. Qwen3)."""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    return re.sub(r"<think>.*?(?:</think>|$)", "", text, flags=re.DOTALL).strip()
 
 
 def _chat(messages: list, max_tokens: int = 500) -> str:
@@ -62,14 +62,14 @@ def _extract_json_object(text: str) -> dict:
     start = text.find("{")
     end = text.rfind("}") + 1
     if start == -1 or end == 0:
-        raise ValueError(f"No JSON object found in response: {text[:200]}")
+        raise ValueError(f"No JSON object found in response: {repr(text)}")
     return json.loads(text[start:end])
 
 
 def _extract_json_array(text: str) -> list:
     start = text.find("[")
     if start == -1:
-        raise ValueError(f"No JSON array found in response: {text[:200]}")
+        raise ValueError(f"No JSON array found in response: {repr(text)}")
     end = text.rfind("]") + 1
     candidate = text[start:end] if end > 0 else text[start:]
     try:
@@ -229,7 +229,7 @@ Rispondi SOLO con JSON valido:
   "source": "fonte verificabile"
 }}"""
 
-    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=500)
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=4000)
     data = _extract_json_object(text)
     data["poi_id"] = poi.id
     data["difficulty"] = difficulty
@@ -256,7 +256,7 @@ Regole OBBLIGATORIE:
 - Includi un fatto sorprendente poco noto MA verificabile su questo specifico luogo
 - Chiudi con una connessione emotiva o una domanda retorica"""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=600)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def generate_curiosity(poi: POI, profile: UserProfile) -> str:
@@ -268,7 +268,7 @@ Livello: {profile.cultural_level}
 
 Max 80 parole. Tono: "lo sapevi che...?" coinvolgente."""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=200)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def generate_connection(poi1: POI, poi2: POI, profile: UserProfile) -> str:
@@ -280,7 +280,7 @@ La connessione può essere storica, artistica, leggendaria o urbana.
 Lingua: {_lang(profile)}
 Max 100 parole. Tono narrativo, come se stessi svelando un segreto."""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=250)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
@@ -321,7 +321,7 @@ Il prompt deve produrre un'immagine fotorealistica, prospettiva frontale, luce n
 Includi dettagli storici accurati: architettura, persone, vestiti, atmosfera dell'epoca.
 Rispondi SOLO con il prompt in inglese, nient'altro. Max 200 parole."""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def rank_pois(
@@ -395,7 +395,7 @@ Deduci e rispondi SOLO con JSON:
   "age_range": "fascia dedotta o null"
 }}"""
 
-    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
     return _extract_json_object(text)
 
 
