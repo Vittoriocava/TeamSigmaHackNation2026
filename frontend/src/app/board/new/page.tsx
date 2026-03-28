@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/UI/Button";
 import { Card } from "@/components/UI/Card";
-import { useStore, BoardStop } from "@/lib/store";
+import { useStore, BoardStop, RankedPOI } from "@/lib/store";
 import { AlertCircle, ChevronRight, Loader } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -15,12 +15,40 @@ interface City {
   description: string;
 }
 
+const STOP_TYPES = ["story", "quiz", "curiosity", "challenge", "connection", "ar", "geoguessr"];
+
+function slugify(city: string) {
+  return city.toLowerCase().replace(/\s+/g, "-").replace(/'/g, "");
+}
+
+function buildStopsFromPois(pois: RankedPOI[], mode: string): BoardStop[] {
+  // Deduplicate by id
+  const unique = Array.from(new Map(pois.map((p) => [p.id, p])).values());
+  return unique.map((poi, i) => {
+    let stype: string;
+    if (i === 0) stype = "story";
+    else if (i === unique.length - 1) stype = "challenge";
+    else stype = STOP_TYPES[i % STOP_TYPES.length];
+
+    return {
+      poi,
+      type: stype,
+      content: {
+        instruction: `Visita ${poi.name}`,
+        description: poi.description ?? "",
+        why_for_you: poi.why_for_you ?? "",
+      },
+      completed: false,
+    };
+  });
+}
+
 export default function NewBoardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryCity = searchParams.get("city");
   const mode = searchParams.get("mode") || "solo";
-  const { user, setCurrentGame } = useStore();
+  const { trip, setCurrentGame } = useStore();
 
   const [cities, setCities] = useState<City[]>([]);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
@@ -29,12 +57,11 @@ export default function NewBoardPage() {
   const [searchError, setSearchError] = useState("");
   const [searchInput, setSearchInput] = useState("");
 
-  // Se arriva con query param city, crea il gioco direttamente senza mostrare la UI
   useEffect(() => {
     if (queryCity) {
       const city: City = {
         name: queryCity,
-        slug: queryCity.toLowerCase().replace(/\s+/g, "-").replace(/'/g, ""),
+        slug: slugify(queryCity),
         lat: 41.8902,
         lng: 12.4922,
         description: "",
@@ -68,7 +95,7 @@ export default function NewBoardPage() {
     setSearchInput(cityName);
     const city: City = {
       name: cityName,
-      slug: cityName.toLowerCase().replace(/\s+/g, "-").replace(/'/g, ""),
+      slug: slugify(cityName),
       lat: 41.8902,
       lng: 12.4922,
       description: "",
@@ -79,6 +106,29 @@ export default function NewBoardPage() {
   };
 
   const proceedToGame = async (city: City) => {
+    const gameId = `local-${city.slug}-${Date.now()}`;
+
+    // Use liked POIs from the trip planning flow if available for this city
+    const hasTripPois =
+      trip.likedPois.length > 0 &&
+      trip.city.toLowerCase() === city.name.toLowerCase();
+
+    if (hasTripPois) {
+      const stops = buildStopsFromPois(trip.likedPois, mode);
+      setCurrentGame({
+        id: gameId,
+        city: city.name,
+        citySlug: city.slug,
+        mode,
+        stops,
+        currentStopIndex: 0,
+        score: 0,
+      });
+      router.push(`/board/${gameId}?city=${encodeURIComponent(city.name)}&mode=${mode}`);
+      return;
+    }
+
+    // Fallback: call create-demo for cities without a planned trip
     const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     try {
       const gameRes = await fetch(`${API}/api/game/create-demo`, {
@@ -86,34 +136,31 @@ export default function NewBoardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           city: city.name,
-          mode: mode,
+          mode,
           duration_days: 1,
           budget: "medio",
           profile: { interests: [] },
         }),
       });
 
-      if (!gameRes.ok) {
-        throw new Error(`API error: ${gameRes.status}`);
-      }
+      if (!gameRes.ok) throw new Error(`API error: ${gameRes.status}`);
 
       const gameData = await gameRes.json();
-      const gameId = gameData.game_id || `local-${city.slug}-${Date.now()}`;
+      const resolvedGameId = gameData.game_id || gameId;
 
-      // Store board in Zustand so the board page can use it when gameId is local-*
       if (gameData.board) {
         setCurrentGame({
-          id: gameId,
+          id: resolvedGameId,
           city: gameData.board.city || city.name,
           citySlug: gameData.board.city_slug || city.slug,
-          mode: mode,
+          mode,
           stops: (gameData.board.stops || []) as BoardStop[],
           currentStopIndex: 0,
           score: 0,
         });
       }
 
-      router.push(`/board/${gameId}?city=${encodeURIComponent(city.name)}&mode=${mode}`);
+      router.push(`/board/${resolvedGameId}?city=${encodeURIComponent(city.name)}&mode=${mode}`);
     } catch (err) {
       setSearchError("Errore nella creazione del gioco. Riprova.");
       setCreatingGame(false);
@@ -121,7 +168,6 @@ export default function NewBoardPage() {
     }
   };
 
-  // If city came from query param, show full-screen loading while game is being created
   if (creatingGame) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
@@ -130,7 +176,7 @@ export default function NewBoardPage() {
           Preparando l&apos;avventura a {selectedCity?.name}
         </h2>
         <p className="text-white/50 text-sm">
-          L&apos;AI sta generando il tuo percorso di gioco...
+          Costruisco il tabellone con i tuoi posti preferiti...
         </p>
         {searchError && (
           <div className="mt-6 text-red-400 text-sm">
@@ -150,13 +196,11 @@ export default function NewBoardPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 pb-20">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-8">
           <h1 className="font-display text-3xl font-bold mb-2">Scegli una città</h1>
           <p className="text-white/50">Seleziona da dove vuoi iniziare la tua avventura</p>
         </div>
 
-        {/* Search Bar */}
         <div className="mb-6">
           <input
             type="text"
@@ -164,25 +208,19 @@ export default function NewBoardPage() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && searchInput.trim()) {
-                searchCity(searchInput);
-              }
+              if (e.key === "Enter" && searchInput.trim()) searchCity(searchInput);
             }}
             className="w-full glass rounded-xl py-3 px-4 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
 
-        {/* Errore di ricerca */}
         {searchError && (
           <Card className="mb-6 border-l-4 border-red-500/50 bg-red-500/5 flex items-start gap-3">
             <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-red-300">{searchError}</p>
-            </div>
+            <p className="text-sm text-red-300">{searchError}</p>
           </Card>
         )}
 
-        {/* Loading state */}
         {loading ? (
           <Card className="text-center py-8">
             <Loader size={24} className="mx-auto animate-spin text-primary mb-3" />
@@ -190,7 +228,6 @@ export default function NewBoardPage() {
           </Card>
         ) : (
           <>
-            {/* Lista di città */}
             <div className="space-y-2 max-h-96 overflow-y-auto mb-6">
               {cities.map((city) => (
                 <Card
@@ -210,12 +247,7 @@ export default function NewBoardPage() {
                 </Card>
               ))}
             </div>
-
-            {/* Bottone Indietro */}
-            <Button
-              onClick={() => router.push("/")}
-              className="w-full !bg-white/5 hover:!bg-white/10"
-            >
+            <Button onClick={() => router.push("/")} className="w-full !bg-white/5 hover:!bg-white/10">
               Indietro
             </Button>
           </>

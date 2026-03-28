@@ -177,7 +177,7 @@ export default function SwipePoisPage() {
 
             {likedPois.length > 0 && (
               <div className="w-full space-y-2 mb-6 text-left mt-4">
-                {likedPois.map((p) => (
+                {Array.from(new Map(likedPois.map((p) => [p.id, p])).values()).map((p) => (
                   <div key={p.id} className="glass rounded-xl px-4 py-2.5 flex items-center gap-3">
                     <span>{CATEGORY_EMOJI[p.category] ?? "📍"}</span>
                     <span className="text-sm font-medium">{p.name}</span>
