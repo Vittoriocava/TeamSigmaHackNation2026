@@ -1,6 +1,5 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+// Supabase rimosso — autenticazione gestita localmente dal backend FastAPI.
+// Questo file è mantenuto per compatibilità con eventuali import rimasti.
+// Non usare: usa direttamente fetch('/api/auth/...') oppure useStore().
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key";
-
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = null;
