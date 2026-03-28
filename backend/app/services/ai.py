@@ -28,6 +28,10 @@ def _vision_model() -> str:
     return get_settings().regolo_vision_model
 
 
+def _image_model() -> str:
+    return get_settings().regolo_image_model
+
+
 def _lang(profile: UserProfile) -> str:
     langs = {"it": "italiano", "en": "English", "fr": "français", "es": "español"}
     return langs.get(profile.language, "italiano")
@@ -46,6 +50,22 @@ def _chat(messages: list, max_tokens: int = 500) -> str:
 async def _chat_async(messages: list, max_tokens: int = 500) -> str:
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, lambda: _chat(messages, max_tokens))
+
+
+def _extract_json_object(text: str) -> dict:
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start == -1 or end == 0:
+        raise ValueError(f"No JSON object found in response: {text[:200]}")
+    return json.loads(text[start:end])
+
+
+def _extract_json_array(text: str) -> list:
+    start = text.find("[")
+    end = text.rfind("]") + 1
+    if start == -1 or end == 0:
+        raise ValueError(f"No JSON array found in response: {text[:200]}")
+    return json.loads(text[start:end])
 
 
 async def generate_quiz(
@@ -73,9 +93,7 @@ Rispondi SOLO con JSON valido:
 }}"""
 
     text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=500)
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    data = json.loads(text[start:end])
+    data = _extract_json_object(text)
     data["poi_id"] = poi.id
     data["difficulty"] = difficulty
     return QuizQuestion(**data)
@@ -188,9 +206,7 @@ Rispondi SOLO con un JSON array di oggetti con i campi originali + quelli nuovi.
 Ordina per relevance_score decrescente."""
 
     text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=4000)
-    start = text.find("[")
-    end = text.rfind("]") + 1
-    return json.loads(text[start:end])
+    return _extract_json_array(text)
 
 
 async def infer_profile(quiz_answers: list[dict], swipe_batch: list[dict]) -> dict:
@@ -208,9 +224,7 @@ Deduci e rispondi SOLO con JSON:
 }}"""
 
     text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    return json.loads(text[start:end])
+    return _extract_json_object(text)
 
 
 def question_hash(q: QuizQuestion) -> str:
