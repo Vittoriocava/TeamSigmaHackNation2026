@@ -1,44 +1,119 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, Volume2, Camera, Clock, MapPin,
-  Shield, Star, Share2, Puzzle,
+  Shield, Star, Share2, Puzzle, Loader,
 } from "lucide-react";
 import { Button } from "@/components/UI/Button";
 import { Card } from "@/components/UI/Card";
-
-// Mock POI data
-const MOCK_POI = {
-  id: "colosseo",
-  name: "Colosseo",
-  city: "Roma",
-  category: "storia",
-  description:
-    "L'Anfiteatro Flavio, meglio noto come Colosseo, è il più grande anfiteatro del mondo romano. Costruito in soli 8 anni (72-80 d.C.), poteva ospitare tra 50.000 e 87.000 spettatori.",
-  lat: 41.8902,
-  lng: 12.4922,
-  owner: { name: "GladiatorMax", tier: 2, weeks: 5 },
-  pieces_collected: 2,
-};
+import { useStore } from "@/lib/store";
 
 const TIMELINE_ERAS = [
-  { label: "80 d.C.", year: 80, description: "Inaugurazione sotto Tito", image: "/placeholder-roman.jpg" },
-  { label: "1200", year: 1200, description: "Fortezza dei Frangipane", image: "/placeholder-medieval.jpg" },
-  { label: "1800", year: 1800, description: "Scavi archeologici", image: "/placeholder-1800.jpg" },
-  { label: "1950", year: 1950, description: "Restauro post-bellico", image: "/placeholder-1950.jpg" },
-  { label: "Oggi", year: 2024, description: "Patrimonio UNESCO", image: "/placeholder-today.jpg" },
+  { label: "Origini", year: 0, description: "Le prime origini storiche del luogo" },
+  { label: "Medioevo", year: 1200, description: "Il periodo medievale" },
+  { label: "1800", year: 1800, description: "Il XIX secolo" },
+  { label: "1900", year: 1950, description: "Il Novecento" },
+  { label: "Oggi", year: 2024, description: "Patrimonio contemporaneo" },
 ];
+
+interface TerritoryOwner {
+  name: string;
+  tier: number;
+  weeks: number;
+}
 
 export default function TappaPage() {
   const params = useParams();
   const router = useRouter();
+  const poiId = params.poiId as string;
+
+  const { trip, currentGame, savedItineraries, token } = useStore();
+
   const [activeTab, setActiveTab] = useState<"info" | "timeline" | "ar" | "pieces">("info");
   const [selectedEra, setSelectedEra] = useState(0);
-  const [showAR, setShowAR] = useState(false);
   const [narrating, setNarrating] = useState(false);
+  const [owner, setOwner] = useState<TerritoryOwner | null>(null);
+  const [piecesCollected] = useState(0);
+
+  // Look up POI from store: trip.rankedPois → currentGame.stops → savedItineraries
+  const poi = (() => {
+    // 1. From current trip ranked POIs
+    const fromTrip = trip.rankedPois.find((p) => p.id === poiId);
+    if (fromTrip) return { ...fromTrip, city: trip.city };
+
+    // 2. From current game board stops
+    if (currentGame) {
+      const stop = currentGame.stops.find((s) => s.poi.id === poiId);
+      if (stop) return { ...stop.poi, city: currentGame.city };
+    }
+
+    // 3. From saved itineraries — they store poi_id/poi_name in stops but not full POI
+    // Try to reconstruct minimal info
+    for (const saved of savedItineraries) {
+      for (const day of saved.itinerary) {
+        const stop = day.stops.find((s) => s.poi_id === poiId);
+        if (stop) {
+          return {
+            id: poiId,
+            name: stop.poi_name,
+            city: saved.city,
+            category: "cultura",
+            description: stop.tips || "Scopri questo luogo affascinante",
+            lat: 0,
+            lng: 0,
+            relevance_score: 0,
+            estimated_cost: "",
+            estimated_duration: stop.duration_min,
+            hidden_gem: false,
+            why_for_you: stop.tips || "",
+            crowd_level: "",
+          };
+        }
+      }
+    }
+
+    return null;
+  })();
+
+  // Fetch territory ownership
+  useEffect(() => {
+    if (!poiId) return;
+    const fetchOwner = async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch(`/api/territory/poi/${encodeURIComponent(poiId)}`, { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.owner) {
+          const o = data.owner;
+          setOwner({
+            name: o.users?.display_name || o.user_id || "Anonimo",
+            tier: o.tier || 1,
+            weeks: o.weeks_held || 0,
+          });
+        }
+      } catch {
+        // Territory info is optional, ignore errors
+      }
+    };
+    fetchOwner();
+  }, [poiId, token]);
+
+  if (!poi) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <Loader size={32} className="animate-spin text-primary" />
+        <p className="text-white/60 text-sm">Caricamento luogo...</p>
+        <button onClick={() => router.back()} className="text-xs text-white/40 underline mt-2">
+          Torna indietro
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-8">
@@ -55,28 +130,28 @@ export default function TappaPage() {
             </button>
             <div className="flex items-center gap-2 mb-1">
               <MapPin size={14} className="text-primary-light" />
-              <span className="text-xs text-white/60">{MOCK_POI.city}</span>
+              <span className="text-xs text-white/60">{poi.city}</span>
               <span className="text-xs glass px-2 py-0.5 rounded-full">
-                {MOCK_POI.category}
+                {poi.category}
               </span>
             </div>
-            <h1 className="font-display text-3xl font-bold">{MOCK_POI.name}</h1>
+            <h1 className="font-display text-3xl font-bold">{poi.name}</h1>
           </div>
         </div>
       </div>
 
       {/* Owner badge */}
-      {MOCK_POI.owner && (
+      {owner && (
         <div className="px-4 -mt-2 mb-4">
           <div className="glass rounded-xl p-3 flex items-center gap-3">
             <Shield size={18} className="text-blue-400" />
             <div className="flex-1">
               <p className="text-sm font-medium">
                 Territorio di{" "}
-                <span className="text-blue-400">{MOCK_POI.owner.name}</span>
+                <span className="text-blue-400">{owner.name}</span>
               </p>
               <p className="text-[10px] text-white/50">
-                Tier {MOCK_POI.owner.tier} · {MOCK_POI.owner.weeks} settimane
+                Tier {owner.tier} · {owner.weeks} settimane
               </p>
             </div>
             <Button variant="ghost" size="sm">
@@ -121,7 +196,7 @@ export default function TappaPage() {
               exit={{ opacity: 0 }}
             >
               <p className="text-sm text-white/80 leading-relaxed mb-4">
-                {MOCK_POI.description}
+                {poi.why_for_you || poi.description}
               </p>
 
               {/* Audio narration */}
@@ -162,17 +237,21 @@ export default function TappaPage() {
               <div className="grid grid-cols-3 gap-2">
                 <Card animate={false} className="text-center">
                   <Clock size={16} className="text-white/50 mx-auto mb-1" />
-                  <p className="text-sm font-bold">90 min</p>
+                  <p className="text-sm font-bold">
+                    {poi.estimated_duration ? `${poi.estimated_duration} min` : "—"}
+                  </p>
                   <p className="text-[10px] text-white/40">Durata</p>
                 </Card>
                 <Card animate={false} className="text-center">
-                  <span className="text-sm block mb-1">€€</span>
-                  <p className="text-sm font-bold">12€</p>
+                  <span className="text-sm block mb-1">€</span>
+                  <p className="text-sm font-bold">{poi.estimated_cost || "—"}</p>
                   <p className="text-[10px] text-white/40">Ingresso</p>
                 </Card>
                 <Card animate={false} className="text-center">
                   <Star size={16} className="text-yellow-400 mx-auto mb-1" />
-                  <p className="text-sm font-bold">9.5</p>
+                  <p className="text-sm font-bold">
+                    {poi.relevance_score ? poi.relevance_score.toFixed(1) : "—"}
+                  </p>
                   <p className="text-[10px] text-white/40">Score</p>
                 </Card>
               </div>
@@ -210,7 +289,7 @@ export default function TappaPage() {
                 <div className="text-center">
                   <span className="text-4xl block mb-2">🏛️</span>
                   <p className="text-sm font-medium">
-                    {MOCK_POI.name} — {TIMELINE_ERAS[selectedEra].label}
+                    {poi.name} — {TIMELINE_ERAS[selectedEra].label}
                   </p>
                   <p className="text-xs text-white/50 mt-1">
                     {TIMELINE_ERAS[selectedEra].description}
@@ -245,10 +324,7 @@ export default function TappaPage() {
               exit={{ opacity: 0 }}
               className="space-y-3"
             >
-              <Card
-                onClick={() => setShowAR(true)}
-                className="text-center py-8"
-              >
+              <Card className="text-center py-8">
                 <Camera size={40} className="text-primary-light mx-auto mb-3" />
                 <h3 className="font-display text-lg font-bold mb-1">
                   Come era
@@ -300,12 +376,12 @@ export default function TappaPage() {
                   <div
                     key={piece}
                     className={`w-20 h-20 rounded-2xl flex items-center justify-center text-2xl ${
-                      piece <= MOCK_POI.pieces_collected
+                      piece <= piecesCollected
                         ? "bg-primary/30 border-2 border-primary"
                         : "glass border-2 border-dashed border-white/20"
                     }`}
                   >
-                    {piece <= MOCK_POI.pieces_collected ? (
+                    {piece <= piecesCollected ? (
                       <Puzzle size={28} className="text-primary-light" />
                     ) : (
                       <span className="text-white/20">?</span>
@@ -316,26 +392,26 @@ export default function TappaPage() {
 
               <p className="text-center text-sm mb-6">
                 <span className="text-primary-light font-bold">
-                  {MOCK_POI.pieces_collected}
+                  {piecesCollected}
                 </span>
                 /3 pezzi raccolti
               </p>
 
               {/* Quiz to earn pieces */}
               <Button className="w-full mb-3">
-                Quiz sul Colosseo → Guadagna 1 pezzo
+                Quiz su {poi.name} → Guadagna 1 pezzo
               </Button>
               <Button variant="secondary" className="w-full">
-                GeoGuessr Roma → Guadagna 1 pezzo
+                GeoGuessr {poi.city} → Guadagna 1 pezzo
               </Button>
 
-              {MOCK_POI.pieces_collected >= 3 && (
+              {piecesCollected >= 3 && (
                 <div className="mt-4 glass-dark rounded-xl p-4 text-center border border-green-500/30">
                   <p className="text-green-400 font-semibold">
                     Pre-reclamo attivo!
                   </p>
                   <p className="text-xs text-white/50 mt-1">
-                    Vai fisicamente al Colosseo per conquistare il territorio
+                    Vai fisicamente a {poi.name} per conquistare il territorio
                   </p>
                 </div>
               )}
