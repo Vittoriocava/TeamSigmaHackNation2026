@@ -1,3 +1,4 @@
+import asyncio
 import json
 import hashlib
 from openai import OpenAI
@@ -46,6 +47,27 @@ def _chat(messages: list, max_tokens: int = 500) -> str:
     return response.choices[0].message.content
 
 
+async def _chat_async(messages: list, max_tokens: int = 500) -> str:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _chat(messages, max_tokens))
+
+
+def _extract_json_object(text: str) -> dict:
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start == -1 or end == 0:
+        raise ValueError(f"No JSON object found in response: {text[:200]}")
+    return json.loads(text[start:end])
+
+
+def _extract_json_array(text: str) -> list:
+    start = text.find("[")
+    end = text.rfind("]") + 1
+    if start == -1 or end == 0:
+        raise ValueError(f"No JSON array found in response: {text[:200]}")
+    return json.loads(text[start:end])
+
+
 async def generate_quiz(
     poi: POI,
     profile: UserProfile,
@@ -70,10 +92,8 @@ Rispondi SOLO con JSON valido:
   "source": "fonte verificabile"
 }}"""
 
-    text = _chat([{"role": "user", "content": prompt}], max_tokens=500)
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    data = json.loads(text[start:end])
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=500)
+    data = _extract_json_object(text)
     data["poi_id"] = poi.id
     data["difficulty"] = difficulty
     return QuizQuestion(**data)
@@ -83,7 +103,6 @@ async def generate_story(poi: POI, profile: UserProfile, city: str) -> str:
     prompt = f"""Sei il narratore di Play The City. Genera una micro-storia coinvolgente per:
 Luogo: {poi.name} a {city}
 Descrizione: {poi.description}
-Wikipedia: {poi.wikipedia_url}
 
 Profilo giocatore: interessi {profile.interests}, livello {profile.cultural_level}
 Lingua: {_lang(profile)}
@@ -95,7 +114,7 @@ Regole:
 - Includi un fatto sorprendente poco noto
 - Chiudi con una connessione emotiva o una domanda retorica"""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=600)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=600)
 
 
 async def generate_curiosity(poi: POI, profile: UserProfile) -> str:
@@ -107,7 +126,7 @@ Livello: {profile.cultural_level}
 
 Max 80 parole. Tono: "lo sapevi che...?" coinvolgente."""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=200)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=200)
 
 
 async def generate_connection(poi1: POI, poi2: POI, profile: UserProfile) -> str:
@@ -119,7 +138,7 @@ La connessione può essere storica, artistica, leggendaria o urbana.
 Lingua: {_lang(profile)}
 Max 100 parole. Tono narrativo, come se stessi svelando un segreto."""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=250)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=250)
 
 
 async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
@@ -129,23 +148,25 @@ async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
         user_text += f"\nIl luogo atteso è: {poi.name}. Conferma se corrisponde."
 
     client = get_client()
-    response = client.chat.completions.create(
-        model=_vision_model(),
-        max_tokens=300,
-        messages=[
-            {"role": "system", "content": system_msg},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
-                    },
-                    {"type": "text", "text": user_text},
-                ],
-            },
-        ],
-    )
+    loop = asyncio.get_event_loop()
+
+    def _call():
+        return client.chat.completions.create(
+            model=_vision_model(),
+            max_tokens=300,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
+                        {"type": "text", "text": user_text},
+                    ],
+                },
+            ],
+        )
+
+    response = await loop.run_in_executor(None, _call)
     text = response.choices[0].message.content
     start = text.find("{")
     end = text.rfind("}") + 1
@@ -158,36 +179,61 @@ Il prompt deve produrre un'immagine fotorealistica, prospettiva frontale, luce n
 Includi dettagli storici accurati: architettura, persone, vestiti, atmosfera dell'epoca.
 Rispondi SOLO con il prompt in inglese, nient'altro. Max 200 parole."""
 
-    return _chat([{"role": "user", "content": prompt}], max_tokens=300)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
 
 
 async def rank_pois(
     pois: list[dict], profile: UserProfile, city: str, budget: str = "medio"
 ) -> list[dict]:
-    prompt = f"""Sei il motore di personalizzazione di Play The City.
-Città: {city}
-Profilo: interessi={profile.interests}, livello={profile.cultural_level}, età={profile.age_range}, budget={budget}
+    # Send only ids+names to keep the prompt small and the response predictable
+    slim = [{"id": p["id"], "name": p["name"], "category": p.get("category", "")} for p in pois[:40]]
 
-Ricevi una lista di POI grezzi. Per ciascuno assegna:
-- relevance_score (0-10): quanto è adatto a QUESTO profilo
-- why_for_you: frase breve sul perché questo posto è giusto per l'utente
-- hidden_gem: true se poco noto ma di alto valore
-- estimated_cost: "gratuito" / "€" / "€€" / "€€€"
-- crowd_level: "basso" / "medio" / "alto"
+    prompt = f"""OUTPUT MUST BE VALID JSON ONLY. NO PREAMBLE. NO EXPLANATION. START WITH [ AND END WITH ].
 
-Garantisci un mix bilanciato: non solo musei, non solo food.
-Se budget basso, priorità ai posti gratuiti.
+Rank these {len(slim)} places in {city} for a user with:
+- interests: {profile.interests}
+- cultural level: {profile.cultural_level}
+- budget: {budget}
 
-POI da valutare:
-{json.dumps(pois[:40], ensure_ascii=False, indent=2)}
+For each place output a JSON object with EXACTLY these fields:
+"id", "relevance_score" (0-10 float), "why_for_you" (short Italian phrase), "hidden_gem" (boolean), "estimated_cost" ("gratuito"/"€"/"€€"/"€€€"), "crowd_level" ("basso"/"medio"/"alto")
 
-Rispondi SOLO con un JSON array di oggetti con i campi originali + quelli nuovi.
-Ordina per relevance_score decrescente."""
+Places: {json.dumps(slim, ensure_ascii=False)}
 
-    text = _chat([{"role": "user", "content": prompt}], max_tokens=4000)
-    start = text.find("[")
-    end = text.rfind("]") + 1
-    return json.loads(text[start:end])
+["""
+
+    text = await _chat_async(
+        [{"role": "user", "content": prompt}],
+        max_tokens=2000,
+    )
+    # The model may or may not include the opening [
+    if not text.strip().startswith("["):
+        text = "[" + text
+
+    try:
+        scores: list[dict] = _extract_json_array(text)
+    except Exception:
+        # Fallback: return pois as-is with default scores
+        return [
+            {**p, "relevance_score": 7.0, "why_for_you": "Luogo interessante", "hidden_gem": False, "estimated_cost": "gratuito", "crowd_level": "medio"}
+            for p in pois[:20]
+        ]
+
+    # Merge scores back into full POI data
+    score_map = {s["id"]: s for s in scores if "id" in s}
+    result = []
+    for p in pois:
+        s = score_map.get(p["id"], {})
+        result.append({
+            **p,
+            "relevance_score": s.get("relevance_score", 5.0),
+            "why_for_you": s.get("why_for_you", ""),
+            "hidden_gem": s.get("hidden_gem", False),
+            "estimated_cost": s.get("estimated_cost", "gratuito"),
+            "crowd_level": s.get("crowd_level", "medio"),
+        })
+    result.sort(key=lambda x: x["relevance_score"], reverse=True)
+    return result
 
 
 async def infer_profile(quiz_answers: list[dict], swipe_batch: list[dict]) -> dict:
@@ -204,10 +250,8 @@ Deduci e rispondi SOLO con JSON:
   "age_range": "fascia dedotta o null"
 }}"""
 
-    text = _chat([{"role": "user", "content": prompt}], max_tokens=300)
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    return json.loads(text[start:end])
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
+    return _extract_json_object(text)
 
 
 def question_hash(q: QuizQuestion) -> str:
