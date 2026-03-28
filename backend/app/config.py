@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     supabase_key: str = ""
     supabase_service_key: str = ""
     regolo_api_key: str = ""
-    regolo_chat_model: str = "Llama-3.1-8B-Instruct"
+    regolo_chat_model: str = "gpt-oss-120b"
     regolo_vision_model: str = "Llama-3.2-11B-Vision-Instruct"
     regolo_image_model: str = "flux-dev"
     elevenlabs_api_key: str = ""

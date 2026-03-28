@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import hashlib
 from openai import OpenAI
 from app.config import get_settings
@@ -37,6 +38,11 @@ def _lang(profile: UserProfile) -> str:
     return langs.get(profile.language, "italiano")
 
 
+def _strip_thinking(text: str) -> str:
+    """Remove <think>...</think> blocks emitted by reasoning models (e.g. Qwen3)."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+
 def _chat(messages: list, max_tokens: int = 500) -> str:
     client = get_client()
     response = client.chat.completions.create(
@@ -44,7 +50,7 @@ def _chat(messages: list, max_tokens: int = 500) -> str:
         max_tokens=max_tokens,
         messages=messages,
     )
-    return response.choices[0].message.content
+    return _strip_thinking(response.choices[0].message.content or "")
 
 
 async def _chat_async(messages: list, max_tokens: int = 500) -> str:
@@ -62,10 +68,136 @@ def _extract_json_object(text: str) -> dict:
 
 def _extract_json_array(text: str) -> list:
     start = text.find("[")
-    end = text.rfind("]") + 1
-    if start == -1 or end == 0:
+    if start == -1:
         raise ValueError(f"No JSON array found in response: {text[:200]}")
-    return json.loads(text[start:end])
+    end = text.rfind("]") + 1
+    candidate = text[start:end] if end > 0 else text[start:]
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        # Response was truncated — recover complete objects up to the last valid `}`
+        last_obj_end = candidate.rfind("}")
+        if last_obj_end == -1:
+            raise ValueError(f"No JSON array found in response: {text[:200]}")
+        repaired = candidate[: last_obj_end + 1] + "]"
+        return json.loads(repaired)
+
+
+async def generate_city_pois(city: str, profile: UserProfile, budget: str = "medio") -> list[dict]:
+    """
+    Generate POIs via AI, then enrich coordinates via Nominatim.
+    AI provides cultural knowledge + approximate coords; Nominatim corrects them where possible.
+    """
+    import httpx as _httpx
+    import logging as _logging
+    _log = _logging.getLogger("playthecity")
+
+    # Step 1: AI generates full POI list including approximate coordinates
+    prompt = f"""Sei un esperto di turismo italiano.
+
+Elenca esattamente 10 luoghi DA VISITARE nella città di {city}, Italia.
+Devono essere luoghi REALI, fisicamente situati nel comune di {city}.
+
+Profilo utente:
+- interessi: {profile.interests}
+- livello culturale: {profile.cultural_level}
+- budget: {budget}
+
+OUTPUT: SOLO array JSON valido. Inizia con [ e termina con ]. Nessun testo extra.
+
+Ogni oggetto deve avere questi campi:
+- "name": nome ufficiale del luogo
+- "description": 2-3 frasi di fatti reali su questo luogo a {city}
+- "lat": latitudine approssimativa (numero decimale)
+- "lng": longitudine approssimativa (numero decimale)
+- "category": uno tra: museum, monument, church, restaurant, park, attraction, viewpoint, theatre, castle, archaeological_site
+- "relevance_score": punteggio 0-10
+- "why_for_you": breve frase perché è adatto all'utente
+- "hidden_gem": true o false
+- "estimated_cost": "gratuito" o "€" o "€€" o "€€€"
+- "crowd_level": "basso" o "medio" o "alto"
+
+["""
+
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=5000)
+    if not text.strip().startswith("["):
+        text = "[" + text
+
+    try:
+        raw: list[dict] = _extract_json_array(text)
+    except Exception as e:
+        _log.warning(f"generate_city_pois: JSON parse failed for {city}: {e}")
+        return []
+
+    if not raw:
+        _log.warning(f"generate_city_pois: empty list from AI for {city}")
+        return []
+
+    # Step 2: Enrich coordinates via Nominatim sequentially (rate limit: 1 req/sec)
+    async def _nominatim_coords(name: str) -> tuple[float, float] | None:
+        params = {"q": f"{name}, {city}, Italy", "format": "json", "limit": 1}
+        headers = {"User-Agent": "PlayTheCity/1.0 (hacknation2026)"}
+        try:
+            async with _httpx.AsyncClient(timeout=6) as client:
+                resp = await client.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params=params,
+                    headers=headers,
+                )
+            data = resp.json() if resp.status_code == 200 else []
+            if data:
+                return float(data[0]["lat"]), float(data[0]["lon"])
+        except Exception:
+            pass
+        return None
+
+    result = []
+    for item in raw:
+        name = item.get("name", "").strip()
+        if not name:
+            continue
+
+        # Parse AI coordinates as fallback
+        try:
+            ai_lat = float(item.get("lat") or item.get("latitude") or 0)
+            ai_lng = float(item.get("lng") or item.get("longitude") or item.get("lon") or 0)
+        except (TypeError, ValueError):
+            ai_lat, ai_lng = 0.0, 0.0
+
+        # Try Nominatim for accurate coordinates
+        coords = await _nominatim_coords(name)
+        import asyncio as _asyncio
+        await _asyncio.sleep(1.1)  # Nominatim rate limit
+
+        if coords:
+            lat, lng = coords
+        elif ai_lat and ai_lng:
+            lat, lng = ai_lat, ai_lng
+        else:
+            continue  # no usable coordinates at all
+
+        poi_id = f"ai_{hashlib.md5(name.encode()).hexdigest()[:10]}"
+        result.append({
+            "id": poi_id,
+            "name": name,
+            "lat": lat,
+            "lng": lng,
+            "category": item.get("category", "attraction"),
+            "description": item.get("description", f"Luogo storico di {city}."),
+            "wikipedia_url": "",
+            "wikidata_id": "",
+            "opening_hours": "",
+            "fee": "",
+            "website": "",
+            "relevance_score": float(item.get("relevance_score", 7.0)),
+            "why_for_you": item.get("why_for_you", ""),
+            "hidden_gem": bool(item.get("hidden_gem", False)),
+            "estimated_cost": item.get("estimated_cost", "gratuito"),
+            "crowd_level": item.get("crowd_level", "medio"),
+        })
+
+    result.sort(key=lambda x: x["relevance_score"], reverse=True)
+    return result
 
 
 async def generate_quiz(
@@ -100,18 +232,23 @@ Rispondi SOLO con JSON valido:
 
 
 async def generate_story(poi: POI, profile: UserProfile, city: str) -> str:
+    desc = poi.description or f"un luogo significativo nel centro di {city}, in Calabria, Italia"
     prompt = f"""Sei il narratore di Play The City. Genera una micro-storia coinvolgente per:
-Luogo: {poi.name} a {city}
-Descrizione: {poi.description}
+Luogo: {poi.name}
+Città: {city} (Italia)
+Descrizione verificata: {desc}
 
 Profilo giocatore: interessi {profile.interests}, livello {profile.cultural_level}
 Lingua: {_lang(profile)}
 
-Regole:
+Regole OBBLIGATORIE:
 - 150-250 parole
+- Menziona ESPLICITAMENTE la città "{city}" e la sua posizione geografica reale
+- Usa SOLO fatti geografici e storici verificabili su questo specifico luogo in {city}
+- NON inventare luoghi, eventi o fatti non reali
 - Non iniziare MAI con il nome del luogo
 - Racconta come se il luogo avesse una voce propria
-- Includi un fatto sorprendente poco noto
+- Includi un fatto sorprendente poco noto MA verificabile su questo specifico luogo
 - Chiudi con una connessione emotiva o una domanda retorica"""
 
     return await _chat_async([{"role": "user", "content": prompt}], max_tokens=600)
@@ -190,13 +327,16 @@ async def rank_pois(
 
     prompt = f"""OUTPUT MUST BE VALID JSON ONLY. NO PREAMBLE. NO EXPLANATION. START WITH [ AND END WITH ].
 
-Rank these {len(slim)} places in {city} for a user with:
+You are ranking tourist places for the city of {city} (Italy).
+User profile:
 - interests: {profile.interests}
 - cultural level: {profile.cultural_level}
 - budget: {budget}
 
-For each place output a JSON object with EXACTLY these fields:
-"id", "relevance_score" (0-10 float), "why_for_you" (short Italian phrase), "hidden_gem" (boolean), "estimated_cost" ("gratuito"/"€"/"€€"/"€€€"), "crowd_level" ("basso"/"medio"/"alto")
+IMPORTANT: all places listed belong to {city}. Rank them for this specific city's context.
+
+For EACH place output a JSON object with EXACTLY these fields:
+"id", "relevance_score" (0-10 float), "why_for_you" (short Italian phrase explaining why THIS place in {city} matches the user), "hidden_gem" (boolean), "estimated_cost" ("gratuito"/"€"/"€€"/"€€€"), "crowd_level" ("basso"/"medio"/"alto")
 
 Places: {json.dumps(slim, ensure_ascii=False)}
 

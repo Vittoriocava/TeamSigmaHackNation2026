@@ -6,9 +6,9 @@ from app.models import (
     CreateGameRequest, GameBoard, BoardStop, POI, UserProfile, QuizQuestion,
 )
 from app.auth import get_optional_user
-from app.services.ai import generate_quiz, generate_story, generate_curiosity, generate_connection, rank_pois
+from app.services.ai import generate_quiz, generate_story, generate_curiosity, generate_connection
 from app.db import supabase
-from app.routers.city import build_overpass_query, parse_overpass, enrich_with_wikipedia, fetch_overpass
+from app.routers.city import _fetch_and_filter_pois
 
 router = APIRouter(prefix="/api/game", tags=["game"])
 
@@ -47,24 +47,17 @@ async def create_game(req: CreateGameRequest, user_id: str | None = Depends(get_
     """Create a complete game board for a city. Orchestrates all AI agents."""
     city_slug = _slug(req.city)
 
-    # Step 1: Fetch POIs from OSM (with mirror fallback)
-    query = build_overpass_query(req.city)
-    data = await fetch_overpass(query)
+    # Step 1: Generate + rank POIs via AI (single call, coordinates validated)
+    ranked = await _fetch_and_filter_pois(req.city, req.profile, req.budget)
 
-    raw_pois = parse_overpass(data)
-    raw_pois = await enrich_with_wikipedia(raw_pois)
-
-    if len(raw_pois) < 3:
+    if len(ranked) < 3:
         raise HTTPException(status_code=404, detail=f"Nessun luogo trovato per {req.city}. Prova con il nome italiano esatto (es: 'Firenze', 'Milano').")
 
-    # Step 2: Rank with AI
-    ranked = await rank_pois(raw_pois, req.profile, req.city, req.budget)
-
-    # Step 3: Select top N stops
+    # Step 2: Select top N stops
     n_stops = min(len(ranked), max(6, req.duration_days * 5))
     selected = ranked[:n_stops]
 
-    # Step 4: Build stop types with variety
+    # Step 3: Build stop types with variety
     stop_assignments = []
     for i, poi_data in enumerate(selected):
         poi = POI(**{k: v for k, v in poi_data.items() if k in POI.model_fields})
@@ -78,7 +71,7 @@ async def create_game(req: CreateGameRequest, user_id: str | None = Depends(get_
         prev_poi = POI(**{k: v for k, v in prev_poi_data.items() if k in POI.model_fields}) if prev_poi_data else None
         stop_assignments.append((poi, stype, prev_poi))
 
-    # Step 5: Generate all content in parallel
+    # Step 4: Generate all content in parallel
     content_tasks = [
         _generate_stop_content(poi, stype, prev_poi, req.profile, req.city)
         for poi, stype, prev_poi in stop_assignments
@@ -92,7 +85,7 @@ async def create_game(req: CreateGameRequest, user_id: str | None = Depends(get_
 
     board = GameBoard(city=req.city, city_slug=city_slug, mode=req.mode, stops=stops)
 
-    # Step 6: Save to Supabase (optional — skip if auth unavailable)
+    # Step 5: Save to Supabase (optional — skip if auth unavailable)
     game_id = None
     if user_id:
         try:
