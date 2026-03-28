@@ -17,22 +17,12 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-// Mock data for demo
-const MOCK_TRIPS = [
-  { city: "Roma", slug: "roma", progress: 37, pois: 12, color: "#EF4444" },
-  { city: "Bologna", slug: "bologna", progress: 0, pois: 0, color: "#3B82F6" },
-];
-
-const MOCK_ALERTS = [
-  { type: "decay", text: "Tivoli scade tra 2 giorni", icon: Shield },
-  { type: "quiz", text: "3 sessioni quiz attive ora", icon: Zap },
-  { type: "suggestion", text: "Spello è vicina a te", icon: MapPin },
-];
-
 export default function HomePage() {
   const router = useRouter();
   const { user, profile, isHydrated } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
+  const [trips, setTrips] = useState<Array<{ city: string; slug: string; progress: number; pois: number; color: string }>>([]);
+  const [activeAlerts, setActiveAlerts] = useState<number>(0);
 
   useEffect(() => {
     // Aspetta l'idratazione del localStorage
@@ -41,6 +31,11 @@ export default function HomePage() {
     // Reindirizza al login se non loggato
     if (!user) {
       router.replace("/auth");
+    } else {
+      // Initialize empty trips list (will be loaded from API later)
+      setTrips([]);
+      // Initialize default alerts count
+      setActiveAlerts(0);
     }
   }, [isHydrated, user, router]);
 
@@ -71,9 +66,11 @@ export default function HomePage() {
             </button>
             <button className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center relative">
               <Bell size={18} />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center">
-                3
-              </span>
+              {activeAlerts > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center">
+                  {activeAlerts}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -160,73 +157,79 @@ export default function HomePage() {
         <h2 className="font-display text-lg font-semibold mb-3">
           I tuoi viaggi
         </h2>
-        <div className="flex gap-3 overflow-x-auto pt-2 pb-2 -mx-4 px-4 scrollbar-hide">
-          {MOCK_TRIPS.map((trip) => (
-            <Card
-              key={trip.slug}
-              onClick={() =>
-                router.push(`/board/${trip.slug}`)
-              }
-              className="min-w-[140px] flex-shrink-0"
-            >
-              <div
-                className="w-full h-20 rounded-xl mb-2 flex items-end p-2"
-                style={{
-                  background: `linear-gradient(135deg, ${trip.color}40, ${trip.color}10)`,
-                }}
+        {trips.length > 0 ? (
+          <div className="flex gap-3 overflow-x-auto pt-2 pb-2 -mx-4 px-4 scrollbar-hide">
+            {trips.map((trip) => (
+              <Card
+                key={trip.slug}
+                onClick={() =>
+                  router.push(`/board/${trip.slug}`)
+                }
+                className="min-w-[140px] flex-shrink-0"
               >
-                <MapPin size={16} style={{ color: trip.color }} />
-              </div>
-              <h3 className="font-semibold text-sm">{trip.city}</h3>
-              {trip.progress > 0 ? (
-                <div className="mt-1">
-                  <div className="h-1.5 bg-white/10 rounded-full">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${trip.progress}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-white/50 mt-1">
-                    {trip.progress}% esplorato
-                  </span>
+                <div
+                  className="w-full h-20 rounded-xl mb-2 flex items-end p-2"
+                  style={{
+                    background: `linear-gradient(135deg, ${trip.color}40, ${trip.color}10)`,
+                  }}
+                >
+                  <MapPin size={16} style={{ color: trip.color }} />
                 </div>
-              ) : (
-                <span className="text-[10px] text-white/50">
-                  Prossimo viaggio
-                </span>
-              )}
-            </Card>
-          ))}
-        </div>
+                <h3 className="font-semibold text-sm">{trip.city}</h3>
+                {trip.progress > 0 ? (
+                  <div className="mt-1">
+                    <div className="h-1.5 bg-white/10 rounded-full">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${trip.progress}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-white/50 mt-1">
+                      {trip.progress}% esplorato
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-white/50">
+                    Prossimo viaggio
+                  </span>
+                )}
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="text-center py-6">
+            <p className="text-white/50 text-sm">Nessun viaggio ancora. Inizia il tuo primo viaggio!</p>
+            <button 
+              onClick={() => router.push("/board/new")}
+              className="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium"
+            >
+              Nuovo Viaggio
+            </button>
+          </Card>
+        )}
       </section>
 
       {/* Scopri Ora — Notifiche attive */}
       <section className="px-4 mb-6">
         <h2 className="font-display text-lg font-semibold mb-3">Scopri ora</h2>
         <AnimatePresence>
-          {MOCK_ALERTS.map((alert, i) => (
+          {activeAlerts > 0 ? (
             <motion.div
-              key={i}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
               className="glass rounded-xl p-3 mb-2 flex items-center gap-3"
             >
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  alert.type === "decay"
-                    ? "bg-yellow-500/20"
-                    : alert.type === "quiz"
-                    ? "bg-blue-500/20"
-                    : "bg-green-500/20"
-                }`}
-              >
-                <alert.icon size={14} />
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <Zap size={14} />
               </div>
-              <span className="text-sm flex-1">{alert.text}</span>
+              <span className="text-sm flex-1">{activeAlerts} notifiche attive</span>
               <ChevronRight size={16} className="text-white/30" />
             </motion.div>
-          ))}
+          ) : (
+            <Card className="text-center py-4">
+              <p className="text-white/50 text-sm">Nessuna notifica al momento</p>
+            </Card>
+          )}
         </AnimatePresence>
       </section>
 
@@ -245,10 +248,10 @@ export default function HomePage() {
           </div>
           <div className="flex-1">
             <p className="text-sm font-medium">
-              <span className="text-green-400">42</span> giocatori attivi ora
+              <span className="text-green-400">0</span> giocatori attivi ora
             </p>
             <p className="text-[10px] text-white/50">
-              Roma (18) · Napoli (12) · Firenze (8) · altri
+              Caricamento...
             </p>
           </div>
         </Card>

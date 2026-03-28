@@ -1,48 +1,92 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
-import {
-  User, Shield, Trophy, Coins, MapPin, Puzzle,
-  Settings, ChevronRight, Star, Flame,
-} from "lucide-react";
-import { Card } from "@/components/UI/Card";
-import { Button } from "@/components/UI/Button";
 import { BottomNav } from "@/components/UI/BottomNav";
-
-const MOCK_USER = {
-  displayName: "Leonardo",
-  level: 8,
-  xp: 1250,
-  xpNext: 2000,
-  coins: 340,
-  territories: 3,
-  totalConquered: 12,
-  achievements: ["Esploratore", "Guardiano", "Quiz Master"],
-  interests: ["storia", "arte", "food", "architettura"],
-  streak: 5,
-};
+import { Card } from "@/components/UI/Card";
+import { useStore } from "@/lib/store";
+import { motion } from "framer-motion";
+import {
+	ChevronRight,
+	Coins,
+	Flame, LogOut,
+	MapPin, Puzzle,
+	Settings,
+	Shield,
+	Star,
+	User
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const MOCK_LEADERBOARD = [
   { rank: 1, name: "GladiatorMax", score: 8420, level: 22 },
   { rank: 2, name: "RomaQueen", score: 7100, level: 19 },
   { rank: 3, name: "BorgheseKid", score: 6200, level: 16 },
-  { rank: 7, name: "Leonardo", score: 3400, level: 8, isYou: true },
 ];
 
 export default function ProfiloPage() {
   const router = useRouter();
   const [tab, setTab] = useState<"profilo" | "classifica">("profilo");
+  const [showMenu, setShowMenu] = useState(false);
+  const { user, profile, logout, isHydrated } = useStore();
+  const [userRank, setUserRank] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isHydrated || !user) {
+      router.push("/auth");
+    }
+  }, [isHydrated, user, router]);
+
+  const handleLogout = async () => {
+    logout();
+    router.push("/auth");
+  };
+
+  // Don't render until hydrated
+  if (!isHydrated || !user) {
+    return null;
+  }
+
+  const userData = {
+    displayName: user.displayName,
+    level: user.level || 1,
+    xp: user.xp || 0,
+    xpNext: 2000,
+    coins: profile?.coins || 0,
+    territories: 0,
+    totalConquered: 0,
+    achievements: [] as string[],
+    interests: [] as string[],
+    streak: 0,
+  };
 
   return (
     <div className="min-h-screen pb-20">
       <header className="px-4 pt-12 pb-4">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl font-bold">Profilo</h1>
-          <button className="glass rounded-full p-2">
-            <Settings size={18} />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setShowMenu(!showMenu)}
+              className="glass rounded-full p-2 hover:bg-white/10 transition-colors"
+            >
+              <Settings size={18} />
+            </button>
+            {showMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute right-0 mt-2 glass rounded-xl p-2 min-w-[150px] z-50"
+              >
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-red-400 text-sm"
+                >
+                  <LogOut size={16} />
+                  Esci
+                </button>
+              </motion.div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -50,12 +94,12 @@ export default function ProfiloPage() {
       <section className="px-4 mb-4">
         <Card animate={false} className="text-center py-6">
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-3 text-3xl">
-            {MOCK_USER.displayName[0]}
+            {userData.displayName[0].toUpperCase()}
           </div>
           <h2 className="font-display text-xl font-bold">
-            {MOCK_USER.displayName}
+            {userData.displayName}
           </h2>
-          <p className="text-sm text-white/50">Livello {MOCK_USER.level}</p>
+          <p className="text-sm text-white/50">Livello {userData.level}</p>
 
           {/* XP bar */}
           <div className="mt-3 px-8">
@@ -64,13 +108,13 @@ export default function ProfiloPage() {
                 className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
                 initial={{ width: 0 }}
                 animate={{
-                  width: `${(MOCK_USER.xp / MOCK_USER.xpNext) * 100}%`,
+                  width: `${(userData.xp / userData.xpNext) * 100}%`,
                 }}
                 transition={{ duration: 1, delay: 0.3 }}
               />
             </div>
             <p className="text-[10px] text-white/40 mt-1">
-              {MOCK_USER.xp}/{MOCK_USER.xpNext} XP
+              {userData.xp}/{userData.xpNext} XP
             </p>
           </div>
 
@@ -78,22 +122,22 @@ export default function ProfiloPage() {
           <div className="flex justify-center gap-6 mt-4">
             <div className="text-center">
               <Coins size={18} className="text-yellow-400 mx-auto mb-1" />
-              <p className="font-bold">{MOCK_USER.coins}</p>
+              <p className="font-bold">{userData.coins}</p>
               <p className="text-[10px] text-white/40">Monete</p>
             </div>
             <div className="text-center">
               <Shield size={18} className="text-green-400 mx-auto mb-1" />
-              <p className="font-bold">{MOCK_USER.territories}</p>
+              <p className="font-bold">{userData.territories}</p>
               <p className="text-[10px] text-white/40">Territori</p>
             </div>
             <div className="text-center">
               <MapPin size={18} className="text-blue-400 mx-auto mb-1" />
-              <p className="font-bold">{MOCK_USER.totalConquered}</p>
+              <p className="font-bold">{userData.totalConquered}</p>
               <p className="text-[10px] text-white/40">Conquistati</p>
             </div>
             <div className="text-center">
               <Flame size={18} className="text-orange-400 mx-auto mb-1" />
-              <p className="font-bold">{MOCK_USER.streak}</p>
+              <p className="font-bold">{userData.streak}</p>
               <p className="text-[10px] text-white/40">Streak</p>
             </div>
           </div>
@@ -128,14 +172,18 @@ export default function ProfiloPage() {
           <div>
             <h3 className="font-semibold text-sm mb-2">I tuoi interessi</h3>
             <div className="flex flex-wrap gap-2">
-              {MOCK_USER.interests.map((interest) => (
-                <span
-                  key={interest}
-                  className="glass rounded-full px-3 py-1 text-xs"
-                >
-                  {interest}
-                </span>
-              ))}
+              {userData.interests.length > 0 ? (
+                userData.interests.map((interest) => (
+                  <span
+                    key={interest}
+                    className="glass rounded-full px-3 py-1 text-xs"
+                  >
+                    {interest}
+                  </span>
+                ))
+              ) : (
+                <p className="text-xs text-white/40">Aggiungi i tuoi interessi nel profilo</p>
+              )}
             </div>
           </div>
 
@@ -143,15 +191,19 @@ export default function ProfiloPage() {
           <div>
             <h3 className="font-semibold text-sm mb-2">Achievement</h3>
             <div className="flex gap-2">
-              {MOCK_USER.achievements.map((ach) => (
-                <div
-                  key={ach}
-                  className="glass rounded-xl p-3 text-center flex-1"
-                >
-                  <Star size={20} className="text-yellow-400 mx-auto mb-1" />
-                  <p className="text-[10px] font-medium">{ach}</p>
-                </div>
-              ))}
+              {userData.achievements.length > 0 ? (
+                userData.achievements.map((ach) => (
+                  <div
+                    key={ach}
+                    className="glass rounded-xl p-3 text-center flex-1"
+                  >
+                    <Star size={20} className="text-yellow-400 mx-auto mb-1" />
+                    <p className="text-[10px] font-medium">{ach}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-white/40">Completa le missioni per sbloccare achievement</p>
+              )}
             </div>
           </div>
 
@@ -222,9 +274,7 @@ export default function ProfiloPage() {
             {MOCK_LEADERBOARD.map((player) => (
               <div
                 key={player.rank}
-                className={`glass rounded-xl p-3 flex items-center gap-3 ${
-                  (player as { isYou?: boolean }).isYou ? "border border-primary/30" : ""
-                }`}
+                className={`glass rounded-xl p-3 flex items-center gap-3`}
               >
                 <span className="text-sm font-bold w-6 text-white/50">
                   {player.rank}.
@@ -235,9 +285,6 @@ export default function ProfiloPage() {
                 <div className="flex-1">
                   <p className="text-sm font-medium">
                     {player.name}
-                    {(player as { isYou?: boolean }).isYou && (
-                      <span className="text-primary-light text-xs ml-1">(Tu)</span>
-                    )}
                   </p>
                   <p className="text-[10px] text-white/40">
                     Lv. {player.level}
@@ -248,6 +295,28 @@ export default function ProfiloPage() {
                 </span>
               </div>
             ))}
+            {userRank && (
+              <div className="glass rounded-xl p-3 flex items-center gap-3 border border-primary/30">
+                <span className="text-sm font-bold w-6 text-white/50">
+                  {userRank}.
+                </span>
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm">
+                  {user.displayName[0].toUpperCase()}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">
+                    {user.displayName}
+                    <span className="text-primary-light text-xs ml-1">(Tu)</span>
+                  </p>
+                  <p className="text-[10px] text-white/40">
+                    Lv. {user.level || 1}
+                  </p>
+                </div>
+                <span className="font-mono font-bold text-sm">
+                  0
+                </span>
+              </div>
+            )}
           </div>
         </section>
       )}
