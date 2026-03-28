@@ -89,7 +89,26 @@ backend/
     ├── db.py                  # Supabase client (lazy init)
     ├── auth.py                # Dipendenza JWT: get_current_user
     ├── models.py              # Tutti i Pydantic models
-    ├── routers/
+    ├── routers/## Error Type
+Console Error
+
+## Error Message
+Auth error: "Database error saving new user"
+
+
+    at handleSubmit (src/app/auth/page.tsx:79:15)
+
+## Code Frame
+  77 |       const message = err instanceof Error ? err.message : "Errore di autenticazione";
+  78 |       setError(message);
+> 79 |       console.error("Auth error:", message);
+     |               ^
+  80 |     } finally {
+  81 |       setLoading(false);
+  82 |     }
+
+Next.js version: 15.5.14 (Webpack)
+
     │   ├── city.py            # GET /{city}/pois, POST /{city}/rank
     │   ├── game.py            # POST /create, GET /{id}, POST /{id}/complete-stop
     │   ├── audio.py           # POST /narrate (ElevenLabs TTS)

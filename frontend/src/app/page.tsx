@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
-import {
-  Search,
-  Bell,
-  MapPin,
-  Shield,
-  Zap,
-  Users,
-  Trophy,
-  ChevronRight,
-} from "lucide-react";
-import { Button } from "@/components/UI/Button";
-import { Card } from "@/components/UI/Card";
 import { BottomNav } from "@/components/UI/BottomNav";
+import { Card } from "@/components/UI/Card";
 import { useStore } from "@/lib/store";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    Bell,
+    ChevronRight,
+    MapPin,
+    Search,
+    Shield,
+    Trophy,
+    Users,
+    Zap,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // Mock data for demo
 const MOCK_TRIPS = [
@@ -32,14 +31,23 @@ const MOCK_ALERTS = [
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, profile } = useStore();
+  const { user, profile, isHydrated } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
+    // Aspetta l'idratazione del localStorage
+    if (!isHydrated) return;
+    
+    // Reindirizza al login se non loggato
     if (!user) {
       router.replace("/auth");
     }
-  }, [user, router]);
+  }, [isHydrated, user, router]);
+
+  // Non mostrare niente finché non è idratato
+  if (!isHydrated || !user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen pb-20">
