@@ -217,15 +217,13 @@ Timeline orizzontale su ogni tappa:
 Claude genera il prompt storico → DALL-E 3 genera l'immagine → cachata in DB.
 Esempio: *"Il Foro Romano nel 100 d.C., fotorealistico, luce tramonto, romani in toga, colonne integre"*
 
-### AR "Occhio del Tempo" (Modalità Campo)
-Punti la fotocamera verso un edificio. L'AR sovrappone:
-- Layer storico: immagine AI del luogo nell'epoca passata
-- Personaggi storici come overlay animati
-- Quiz flottanti che emergono dal luogo reale
-- Frecce AR verso dettagli nascosti (date, stemmi, simboli)
+### AR Fotocamera — due esperienze distinte
 
-### "Scatta e Scopri" — Vision Challenge (MVP AR)
-Sfida fotografica: *"Trova e fotografa qualcosa di circolare su questo edificio"*. Claude Vision analizza la foto e conferma. Non guardi il telefono — guardi la città.
+**1. "Come era" — Viaggio nel Tempo**
+Scatti una foto del luogo (edificio, piazza, monumento). Claude Vision riconosce il posto → recupera l'immagine DALL-E già generata per quell'epoca → la sovrappone come overlay semi-trasparente sulla foto scattata. L'utente vede in un'unica immagine il luogo oggi e come appariva nell'antichità. Può scorrere un cursore per dissolvere tra presente e passato. La foto risultante è salvabile e condivisibile — ogni condivisione è promozione organica dell'app.
+
+**2. "Foto col Monumento" — Souvenir AI**
+Scatti un selfie o una foto davanti al monumento. Claude Vision identifica il luogo e il soggetto → compone una foto finale che integra il giocatore nella scena storica generata da DALL-E (es: sei tu davanti al Colosseo ma il Colosseo è integro, anno 80 d.C., con la folla romana). Non un filtro generico — una ricostruzione contestuale e personalizzata. La foto ha il watermark "Play The City" e viene salvata nel profilo come ricordo della conquista.
 
 ### Narratore Vocale (ElevenLabs)
 Ogni micro-storia letta da una voce generata. Tono adattivo al profilo (bambino → voce calda, esperto → voce densa). Voce-personaggio diversa per città (Roma solenne, Napoli vivace). In auricolare mentre si cammina — la città parla senza guardare lo schermo.
