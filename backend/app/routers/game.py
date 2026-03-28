@@ -6,8 +6,9 @@ from app.auth import get_optional_user
 from app.db import supabase
 from app.models import (POI, BoardStop, CreateGameRequest, GameBoard,
                         QuizQuestion, UserProfile)
-from app.routers.city import (build_overpass_query, enrich_with_wikipedia,
-                              fetch_overpass, parse_overpass)
+from app.routers.city import (CITY_POIS, build_overpass_query,
+                              enrich_with_wikipedia, fetch_overpass,
+                              parse_overpass)
 from app.services.ai import (generate_connection, generate_curiosity,
                              generate_quiz, generate_story, rank_pois)
 from fastapi import APIRouter, Depends, HTTPException
@@ -65,25 +66,92 @@ async def _generate_stop_content(poi: POI, stype: str, prev_poi: POI | None,
     return {"instruction": f"Visita {poi.name}"}
 
 
+@router.post("/create-demo")
+async def create_demo_game(req: CreateGameRequest):
+    """Create a demo game without requiring authentication or AI processing.
+    Uses preloaded POI data for supported cities."""
+    city_slug = _slug(req.city)
+
+    # Step 1: Get POIs from local data (no API calls needed)
+    if req.city not in CITY_POIS:
+        raise HTTPException(
+            status_code=404,
+            detail=
+            f"Città '{req.city}' non disponibile in modalità demo. Città supportate: {', '.join(CITY_POIS.keys())}"
+        )
+
+    pois_data = CITY_POIS[req.city]
+
+    if len(pois_data) < 3:
+        raise HTTPException(status_code=404,
+                            detail=f"POI insufficienti per {req.city}")
+
+    # Step 2: Select top N stops
+    n_stops = min(len(pois_data), max(3, req.duration_days * 2))
+    selected = pois_data[:n_stops]
+
+    # Step 3: Build stops with minimal processing
+    stops = []
+    for i, poi_data in enumerate(selected):
+        poi = POI(**{
+            k: v
+            for k, v in poi_data.items() if k in POI.model_fields
+        })
+
+        # Assign stop type
+        if i == 0:
+            stype = "story"
+        elif i == len(selected) - 1:
+            stype = "challenge"
+        else:
+            stype = STOP_TYPES[i % len(STOP_TYPES)]
+
+        # Create minimal content
+        content = {
+            "instruction": f"Visita {poi.name}",
+            "description": poi_data.get("description", "")
+        }
+
+        stops.append(BoardStop(poi=poi, type=stype, content=content))
+
+    board = GameBoard(city=req.city,
+                      city_slug=city_slug,
+                      mode=req.mode,
+                      stops=stops)
+
+    return {"game_id": None, "board": board.model_dump()}
+
+
 @router.post("/create")
 async def create_game(req: CreateGameRequest,
                       user_id: str | None = Depends(get_optional_user)):
     """Create a complete game board for a city. Orchestrates all AI agents."""
     city_slug = _slug(req.city)
 
-    # Step 1: Generate + rank POIs via AI (single call, coordinates validated)
-    ranked = await _fetch_and_filter_pois(req.city, req.profile, req.budget)
+    # Step 1: Fallback to local data if AI processing unavailable
+    if req.city in CITY_POIS:
+        pois_data = CITY_POIS[req.city]
+    else:
+        # Try to fetch from Overpass as fallback
+        try:
+            query = build_overpass_query(req.city)
+            data = await fetch_overpass(query)
+            pois_data = parse_overpass(data)
+            pois_data = await enrich_with_wikipedia(pois_data)
+        except Exception:
+            raise HTTPException(
+                status_code=404,
+                detail=
+                f"Nessun luogo trovato per {req.city}. Prova con il nome italiano esatto (es: 'Firenze', 'Milano')."
+            )
 
-    if len(ranked) < 3:
-        raise HTTPException(
-            status_code=404,
-            detail=
-            f"Nessun luogo trovato per {req.city}. Prova con il nome italiano esatto (es: 'Firenze', 'Milano')."
-        )
+    if len(pois_data) < 3:
+        raise HTTPException(status_code=404,
+                            detail=f"POI insufficienti per {req.city}")
 
     # Step 2: Select top N stops
-    n_stops = min(len(ranked), max(6, req.duration_days * 5))
-    selected = ranked[:n_stops]
+    n_stops = min(len(pois_data), max(6, req.duration_days * 5))
+    selected = pois_data[:n_stops]
 
     # Step 3: Build stop types with variety
     stop_assignments = []
@@ -105,12 +173,16 @@ async def create_game(req: CreateGameRequest,
         }) if prev_poi_data else None
         stop_assignments.append((poi, stype, prev_poi))
 
-    # Step 4: Generate all content in parallel
-    content_tasks = [
-        _generate_stop_content(poi, stype, prev_poi, req.profile, req.city)
-        for poi, stype, prev_poi in stop_assignments
-    ]
-    contents = await asyncio.gather(*content_tasks)
+    # Step 4: Try to generate AI content, fallback to simple content
+    contents = []
+    for poi, stype, prev_poi in stop_assignments:
+        try:
+            content = await _generate_stop_content(poi, stype, prev_poi,
+                                                   req.profile, req.city)
+            contents.append(content)
+        except Exception:
+            # Fallback: simple content if AI fails
+            contents.append({"instruction": f"Visita {poi.name}"})
 
     stops = [
         BoardStop(poi=poi, type=stype, content=content)
@@ -211,4 +283,5 @@ async def get_game_leaderboard(game_id: str):
     result = (supabase.table("game_players").select(
         "user_id, score, unlocked_pois, users(display_name, avatar_url, level)"
     ).eq("game_id", game_id).order("score", desc=True).execute())
+    return {"leaderboard": result.data}
     return {"leaderboard": result.data}

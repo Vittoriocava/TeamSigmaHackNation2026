@@ -1,23 +1,13 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import dynamic from "next/dynamic";
-import {
-  BookOpen, HelpCircle, Eye, Link2, Camera, MapPin,
-  ChevronDown, ChevronUp, Trophy, Coins, Volume2, AlertCircle,
-} from "lucide-react";
-import { Button } from "@/components/UI/Button";
-import { Card } from "@/components/UI/Card";
-import { BottomNav } from "@/components/UI/BottomNav";
-import { useStore } from "@/lib/store";
-import { apiPost } from "@/lib/api";
 import type { MapPOI } from "@/components/Map/GameMap";
 import { BottomNav } from "@/components/UI/BottomNav";
 import { Button } from "@/components/UI/Button";
+import { apiPost } from "@/lib/api";
+import { useStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+    AlertCircle,
     BookOpen,
     Camera,
     ChevronDown, ChevronUp,
@@ -31,7 +21,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 const GameMap = dynamic(
   () => import("@/components/Map/GameMap").then((m) => m.GameMap),
