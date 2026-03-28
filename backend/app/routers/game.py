@@ -49,6 +49,38 @@ async def create_game(req: CreateGameRequest, user_id: str = Depends(get_current
     n_stops = min(len(ranked), max(8, req.duration_days * 5))
     selected = ranked[:n_stops]
 
+
+@router.post("/create-demo")
+async def create_game_demo(req: CreateGameRequest):
+    """Create a demo game without authentication (for development/testing)."""
+    # Ritorna un gioco di demo con la città selezionata
+    return {
+        "id": f"demo-{_slug(req.city)}-{int(__import__('time').time())}",
+        "city": req.city,
+        "city_slug": _slug(req.city),
+        "mode": req.mode or "solo",
+        "stops": [
+            {
+                "poi": {
+                    "id": "1",
+                    "name": f"Punto di interesse 1 - {req.city}",
+                    "lat": 41.8902,
+                    "lng": 12.4922,
+                    "category": "storia",
+                    "description": f"Benvenuto a {req.city}",
+                    "relevance_score": 9.5,
+                    "estimated_cost": "€€",
+                    "estimated_duration": 90,
+                    "hidden_gem": False,
+                    "why_for_you": "Imperdibile"
+                },
+                "type": "story",
+                "content": {"story": f"Stai esplorando {req.city}. Buona avventura!"},
+                "completed": False
+            }
+        ]
+    }
+
     # Step 4: Build board stops with varied types
     stops = []
     for i, poi_data in enumerate(selected):

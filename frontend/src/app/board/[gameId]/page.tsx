@@ -1,17 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useParams, useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import {
-  BookOpen, HelpCircle, Eye, Link2, Camera, MapPin,
-  ChevronDown, ChevronUp, Trophy, Coins, Volume2,
-} from "lucide-react";
-import { Button } from "@/components/UI/Button";
-import { Card } from "@/components/UI/Card";
-import { BottomNav } from "@/components/UI/BottomNav";
 import type { MapPOI } from "@/components/Map/GameMap";
+import { BottomNav } from "@/components/UI/BottomNav";
+import { Button } from "@/components/UI/Button";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    BookOpen,
+    Camera,
+    ChevronDown, ChevronUp,
+    Coins,
+    Eye,
+    HelpCircle,
+    Link2,
+    MapPin,
+    Trophy,
+    Volume2,
+} from "lucide-react";
+import dynamic from "next/dynamic";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 
 // Dynamic import for Leaflet (SSR incompatible)
 const GameMap = dynamic(
@@ -60,7 +67,41 @@ const MOCK_GAME = {
 export default function BoardPage() {
   const params = useParams();
   const router = useRouter();
-  const [game] = useState(MOCK_GAME);
+  const searchParams = useSearchParams?.();
+  const cityParam = searchParams?.get("city") || "Roma";
+  
+  // Crea un game basato sulla città parametro
+  const generateGame = (cityName: string) => {
+    const citySlug = cityName.toLowerCase().replace(/\s+/g, "-");
+    return {
+      id: params.gameId,
+      city: cityName,
+      city_slug: citySlug,
+      mode: "solo",
+      stops: [
+        { 
+          poi: { 
+            id: "1", 
+            name: `Punto di interesse 1 - ${cityName}`, 
+            lat: 41.8902, 
+            lng: 12.4922, 
+            category: "storia", 
+            description: `Benvenuto a ${cityName}`,
+            relevance_score: 9.5, 
+            estimated_cost: "€€", 
+            estimated_duration: 90, 
+            hidden_gem: false, 
+            why_for_you: "Imperdibile" 
+          }, 
+          type: "story", 
+          content: { story: `Stai esplorando ${cityName}. Buona avventura!` }, 
+          completed: false 
+        },
+      ],
+    };
+  };
+
+  const [game] = useState(() => generateGame(cityParam));
   const [currentStop, setCurrentStop] = useState(0);
   const [mapExpanded, setMapExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
