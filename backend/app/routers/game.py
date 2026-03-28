@@ -284,4 +284,95 @@ async def get_game_leaderboard(game_id: str):
         "user_id, score, unlocked_pois, users(display_name, avatar_url, level)"
     ).eq("game_id", game_id).order("score", desc=True).execute())
     return {"leaderboard": result.data}
-    return {"leaderboard": result.data}
+
+
+@router.get("/user/actions")
+async def get_user_actions(user_id: str | None = Depends(get_optional_user)):
+    """Get actionable items for the user: active quizzes, expiring games, nearby POIs"""
+    if not user_id:
+        return {
+            "actions": [{
+                "type": "new_quiz",
+                "text": "Crea una nuova sfida per iniziare",
+                "icon": "Zap",
+                "color": "bg-blue-500/20"
+            }]
+        }
+
+    actions = []
+
+    try:
+        # Get user's active games
+        games_result = supabase.table("games").select(
+            "id, city, created_at, status").eq("created_by",
+                                               user_id).eq("status",
+                                                           "active").execute()
+
+        active_games = games_result.data if games_result.data else []
+
+        # 1. Check for new quizzes in active games
+        if active_games:
+            cities_active = [g["city"] for g in active_games]
+            city_text = cities_active[0] if len(
+                cities_active) == 1 else f"{len(cities_active)} città"
+            actions.append({
+                "type": "new_quiz",
+                "text":
+                f"{len(cities_active)} sessioni quiz attive a {city_text}",
+                "icon": "Zap",
+                "color": "bg-blue-500/20"
+            })
+
+        # 2. Check for expiring games (created more than 7 days ago)
+        from datetime import datetime, timedelta
+        seven_days_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+
+        expiring_games = [
+            g for g in active_games if g["created_at"] < seven_days_ago
+        ]
+        if expiring_games:
+            expiring_city = expiring_games[0]["city"]
+            actions.append({
+                "type": "expiring",
+                "text": f"{expiring_city} scade tra 2 giorni",
+                "icon": "Shield",
+                "color": "bg-yellow-500/20"
+            })
+
+        # 3. Nearby POIs (mock for now - would need user location)
+        # Default suggestion based on current games
+        if active_games:
+            main_city = active_games[0]["city"]
+            nearby_suggestions = {
+                "Roma": "Spello è vicina a te (12 km)",
+                "Firenze": "Volterra è vicina a te (35 km)",
+                "Milano": "Como è vicina a te (50 km)",
+                "Napoli": "Pompeii è vicina a te (20 km)"
+            }
+            if main_city in nearby_suggestions:
+                actions.append({
+                    "type": "nearby",
+                    "text": nearby_suggestions[main_city],
+                    "icon": "MapPin",
+                    "color": "bg-green-500/20"
+                })
+
+        # If no actions, show default suggestions
+        if not actions:
+            actions.append({
+                "type": "new_quiz",
+                "text": "Crea una nuova sfida per iniziare",
+                "icon": "Zap",
+                "color": "bg-blue-500/20"
+            })
+
+    except Exception as e:
+        print(f"Error fetching user actions: {str(e)}")
+        actions.append({
+            "type": "new_quiz",
+            "text": "Scopri nuove sfide",
+            "icon": "Zap",
+            "color": "bg-blue-500/20"
+        })
+
+    return {"actions": actions}

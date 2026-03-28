@@ -27,7 +27,7 @@ export default function ProfiloPage() {
   const router = useRouter();
   const [tab, setTab] = useState<"profilo" | "classifica">("profilo");
   const [showMenu, setShowMenu] = useState(false);
-  const { user, profile, logout, isHydrated } = useStore();
+  const { user, profile, reset, isHydrated } = useStore();
   const [userRank, setUserRank] = useState<number | null>(null);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function ProfiloPage() {
   }, [isHydrated, user, router]);
 
   const handleLogout = async () => {
-    logout();
+    reset();
     router.push("/auth");
   };
 

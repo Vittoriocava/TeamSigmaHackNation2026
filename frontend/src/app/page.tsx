@@ -1,7 +1,7 @@
 "use client";
 
 import { BottomNav } from "@/components/UI/BottomNav";
-import { Card } from "@/components/UI/Card";
+import { apiGet } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -10,9 +10,8 @@ import {
     MapPin,
     Search,
     Shield,
-    Trophy,
     Users,
-    Zap,
+    Zap
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -40,11 +39,24 @@ const ITALIAN_CITIES = [
   "Scalea",
 ];
 
-const MOCK_ALERTS = [
-  { type: "decay", text: "Tivoli scade tra 2 giorni", icon: Shield },
-  { type: "quiz", text: "3 sessioni quiz attive ora", icon: Zap },
-  { type: "suggestion", text: "Spello è vicina a te", icon: MapPin },
+const MOCK_TRIPS = [
+  { city: "Roma", startDate: "Mar 28", endDate: "Mar 31", progress: 65, emoji: "🏛️" },
+  { city: "Firenze", startDate: "Apr 5", endDate: "Apr 8", progress: 30, emoji: "⛪" },
 ];
+
+const ICON_MAP: Record<string, typeof Zap> = {
+  Zap: Zap,
+  Shield: Shield,
+  MapPin: MapPin,
+};
+
+interface Action {
+  type: string;
+  text: string;
+  icon: string;
+  color: string;
+  href?: string;
+}
 
 const CITY_EMOJIS: Record<string, string> = {
   Roma: "🏛️", Firenze: "⛪", Venezia: "🚤", Napoli: "🍕", Milano: "🏙️", Bologna: "🎻",
@@ -52,10 +64,12 @@ const CITY_EMOJIS: Record<string, string> = {
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, isHydrated } = useStore();
+  const { user, isHydrated, token } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [actions, setActions] = useState<Action[]>([]);
+  const [loadingActions, setLoadingActions] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -68,6 +82,40 @@ export default function HomePage() {
     const q = searchQuery.toLowerCase();
     setSuggestions(ITALIAN_CITIES.filter((c) => c.toLowerCase().startsWith(q)).slice(0, 6));
   }, [searchQuery]);
+
+  // Load user actions from backend
+  useEffect(() => {
+    const fetchActions = async () => {
+      try {
+        const response = await apiGet<{ actions: Action[] }>(
+          "/api/game/user/actions",
+          token || undefined
+        );
+        // Add default hrefs if not present
+        const actionsWithHrefs = (response.actions || []).map((action: Action) => ({
+          ...action,
+          href: action.type === "new_quiz" ? "/quiz-live" : "/scopri"
+        }));
+        setActions(actionsWithHrefs);
+      } catch (error) {
+        console.error("Failed to load actions:", error);
+        // Fallback to default action
+        setActions([{
+          type: "new_quiz",
+          text: "Scopri nuove sfide",
+          icon: "Zap",
+          color: "bg-blue-500/20",
+          href: "/quiz-live"
+        }]);
+      } finally {
+        setLoadingActions(false);
+      }
+    };
+
+    if (isHydrated && user) {
+      fetchActions();
+    }
+  }, [isHydrated, user, token]);
 
   const goToCity = (city: string, mode = "solo") => {
     setShowSuggestions(false);
@@ -139,30 +187,6 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Quick Actions */}
-      <section className="px-4 mb-6">
-        <div className="flex gap-3">
-          {[
-            { label: "Tinder Posti", emoji: "💘", color: "bg-pink-500/20", href: "/swipe" },
-            { label: "Quiz Live", icon: <Zap size={18} className="text-yellow-400" />, color: "bg-yellow-500/20", href: "/quiz-live" },
-            { label: "Territori", icon: <Shield size={18} className="text-green-400" />, color: "bg-green-500/20", href: "/territorio" },
-            { label: "Classifica", icon: <Trophy size={18} className="text-purple-400" />, color: "bg-purple-500/20", href: "/profilo" },
-          ].map((item) => (
-            <motion.button
-              key={item.label}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.push(item.href)}
-              className="flex-1 glass rounded-2xl p-3 flex flex-col items-center gap-2"
-            >
-              <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center`}>
-                {item.emoji ? <span className="text-lg">{item.emoji}</span> : item.icon}
-              </div>
-              <span className="text-xs font-medium text-white/80">{item.label}</span>
-            </motion.button>
-          ))}
-        </div>
-      </section>
-
       {/* Città popolari */}
       <section className="px-4 mb-6">
         <h2 className="font-display text-lg font-semibold mb-3">Città popolari</h2>
@@ -181,51 +205,71 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Scopri ora */}
+      {/* I tuoi viaggi */}
       <section className="px-4 mb-6">
-        <h2 className="font-display text-lg font-semibold mb-3">Scopri ora</h2>
-        <AnimatePresence>
-          {MOCK_ALERTS.map((alert, i) => (
+        <h2 className="font-display text-lg font-semibold mb-3">I tuoi viaggi</h2>
+        <div className="space-y-3">
+          {MOCK_TRIPS.map((trip, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
-              className="glass rounded-xl p-3 mb-2 flex items-center gap-3"
+              className="glass rounded-2xl p-4"
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${alert.type === "decay" ? "bg-yellow-500/20" : alert.type === "quiz" ? "bg-blue-500/20" : "bg-green-500/20"}`}>
-                <alert.icon size={14} />
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{trip.emoji}</span>
+                  <div>
+                    <h3 className="font-semibold text-sm">{trip.city}</h3>
+                    <p className="text-xs text-white/50">{trip.startDate} - {trip.endDate}</p>
+                  </div>
+                </div>
               </div>
-              <span className="text-sm flex-1">{alert.text}</span>
-              <ChevronRight size={16} className="text-white/30" />
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-primary-light transition-all"
+                    style={{ width: `${trip.progress}%` }}
+                  />
+                </div>
+                <span className="text-xs font-medium text-white/60">{trip.progress}%</span>
+              </div>
             </motion.div>
           ))}
-        </AnimatePresence>
+        </div>
       </section>
 
-      {/* Organizza */}
-      <section className="px-4 mb-24">
-        <h2 className="font-display text-lg font-semibold mb-3">Organizza un viaggio</h2>
-        <div className="space-y-2">
-          {[
-            { mode: "solo", title: "Avventura Solo", desc: "Percorso AI personalizzato solo per te", emoji: "🎯" },
-            { mode: "group", title: "Gruppo", desc: "Gioca con amici, sfida cooperativa", emoji: "👥" },
-            { mode: "open", title: "Sessione Aperta", desc: "Matchmaking con altri player in città", emoji: "🌍" },
-          ].map((m) => (
-            <Card
-              key={m.mode}
-              onClick={() => searchQuery.trim() ? goToCity(searchQuery, m.mode) : inputRef.current?.focus()}
-              className="flex items-center gap-4"
-            >
-              <span className="text-2xl">{m.emoji}</span>
-              <div className="flex-1">
-                <h3 className="font-semibold text-sm">{m.title}</h3>
-                <p className="text-xs text-white/50">{m.desc}</p>
-              </div>
-              <ChevronRight size={16} className="text-white/30" />
-            </Card>
-          ))}
-        </div>
+      {/* Azioni da fare */}
+      <section className="px-4 mb-6">
+        <h2 className="font-display text-lg font-semibold mb-3">Azioni da fare</h2>
+        {loadingActions ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <AnimatePresence>
+            {actions.map((action, i) => {
+              const IconComponent = ICON_MAP[action.icon] || MapPin;
+              return (
+                <motion.button
+                  key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  onClick={() => router.push(action.href || "/scopri")}
+                  className="w-full glass rounded-xl p-3 mb-2 flex items-center gap-3 hover:bg-white/20 transition-colors"
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${action.color}`}>
+                    <IconComponent size={14} />
+                  </div>
+                  <span className="text-sm flex-1 text-left">{action.text}</span>
+                  <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
+                </motion.button>
+              );
+            })}
+          </AnimatePresence>
+        )}
       </section>
 
       <BottomNav />
