@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import * as turf from "@turf/turf"; // Importiamo la nuova libreria
 
 export interface MapPOI {
   id: string;
@@ -43,22 +44,38 @@ export function GameMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersRef = useRef<L.CircleMarker[]>([]);
+  const fogLayerRef = useRef<L.GeoJSON | null>(null); // Aggiornato per usare GeoJSON
 
+  const [currentPos, setCurrentPos] = useState<[number, number] | null>(userPosition || center);
+  const [exploredAreas, setExploredAreas] = useState<[number, number][]>([]);
+
+  useEffect(() => {
+    if (userPosition) setCurrentPos(userPosition);
+  }, [userPosition]);
+
+  // 1. INIZIALIZZAZIONE MAPPA
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
     const map = L.map(mapRef.current, {
       center,
       zoom,
+      minZoom: 12, // <--- ECCO IL LIMITE DI ZOOM OUT (12 = circa una città intera)
+      maxZoom: 18,
       zoomControl: false,
       attributionControl: false,
+      doubleClickZoom: false,
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
     }).addTo(map);
 
     mapInstance.current = map;
+
+    map.on("click", (e: L.LeafletMouseEvent) => {
+      setCurrentPos([e.latlng.lat, e.latlng.lng]);
+    });
 
     return () => {
       map.remove();
@@ -66,12 +83,67 @@ export function GameMap({
     };
   }, []);
 
-  // Update markers when POIs change
+  // 2. TRACCIAMENTO AREE ESPLORATE
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || !showFog || !currentPos) return;
+
+    setExploredAreas((prev) => {
+      const last = prev[prev.length - 1];
+      if (last) {
+        const dist = map.distance(last, currentPos);
+        if (dist < 100) return prev;
+      }
+      return [...prev, currentPos];
+    });
+  }, [currentPos, showFog]);
+
+  // 3. DISEGNO DEL FOG OF WAR (Fusione perfetta con Turf.js)
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || !showFog) return;
+
+    if (fogLayerRef.current) {
+      map.removeLayer(fogLayerRef.current);
+    }
+
+    // Creiamo il "mondo oscurato"
+    let fogPolygon = turf.bboxPolygon([-180, -90, 180, 90]);
+
+    if (exploredAreas.length > 0) {
+      // Creiamo tutti i cerchi (Turf usa [Longitudine, Latitudine]!)
+      const circles = exploredAreas.map((pos) =>
+        turf.circle([pos[1], pos[0]], 500, { units: "meters", steps: 32 })
+      );
+
+      // Fondiamo insieme tutti i cerchi in un'unica forma pulita senza accavallamenti
+      let mergedExploration = circles[0];
+      for (let i = 1; i < circles.length; i++) {
+        mergedExploration = turf.union(turf.featureCollection([mergedExploration, circles[i]])) as any;
+      }
+
+      // Ritagliamo l'area esplorata fusa dal quadrato scuro gigante
+      const difference = turf.difference(turf.featureCollection([fogPolygon, mergedExploration]));
+      if (difference) {
+        fogPolygon = difference as any;
+      }
+    }
+
+    // Disegniamo la nebbia calcolata
+    fogLayerRef.current = L.geoJSON(fogPolygon, {
+      style: {
+        color: "transparent",
+        fillColor: "#111827",
+        fillOpacity: 0.85,
+      },
+    }).addTo(map);
+  }, [exploredAreas, showFog]);
+
+  // 4. GESTIONE MARKER POI
   useEffect(() => {
     const map = mapInstance.current;
     if (!map) return;
 
-    // Clear old markers
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
@@ -88,37 +160,24 @@ export function GameMap({
         opacity: isFog && showFog ? 0.4 : 1,
       }).addTo(map);
 
-      // Tooltip
       marker.bindTooltip(poi.name, {
         permanent: false,
         direction: "top",
         className: "bg-gray-900 text-white border-none rounded-lg px-2 py-1 text-xs",
       });
 
-      // Fog effect overlay
-      if (isFog && showFog) {
-        L.circle([poi.lat, poi.lng], {
-          radius: 80,
-          fillColor: "#1F2937",
-          fillOpacity: 0.6,
-          stroke: false,
-        }).addTo(map);
-      }
-
-      if (onPoiClick) {
-        marker.on("click", () => onPoiClick(poi));
-      }
+      if (onPoiClick) marker.on("click", () => onPoiClick(poi));
 
       markersRef.current.push(marker);
     });
   }, [pois, showFog, onPoiClick]);
 
-  // User position marker
+  // 5. MARKER DEL GIOCATORE
   useEffect(() => {
     const map = mapInstance.current;
-    if (!map || !userPosition) return;
+    if (!map || !currentPos) return;
 
-    const userMarker = L.circleMarker(userPosition, {
+    const userMarker = L.circleMarker(currentPos, {
       radius: 8,
       fillColor: "#3B82F6",
       fillOpacity: 1,
@@ -126,8 +185,7 @@ export function GameMap({
       weight: 3,
     }).addTo(map);
 
-    // Pulse effect
-    const pulse = L.circleMarker(userPosition, {
+    const pulse = L.circleMarker(currentPos, {
       radius: 20,
       fillColor: "#3B82F6",
       fillOpacity: 0.2,
@@ -138,9 +196,7 @@ export function GameMap({
       userMarker.remove();
       pulse.remove();
     };
-  }, [userPosition]);
+  }, [currentPos]);
 
-  return (
-    <div ref={mapRef} className={`w-full h-full rounded-2xl ${className}`} />
-  );
+  return <div ref={mapRef} className={`w-full h-full rounded-2xl ${className}`} />;
 }
