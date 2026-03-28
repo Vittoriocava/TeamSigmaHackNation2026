@@ -2,7 +2,7 @@ import asyncio
 import json
 import random
 
-from app.auth import get_optional_user
+from app.auth import get_current_user, get_optional_user
 from app.db import supabase
 from app.models import (POI, BoardStop, CreateGameRequest, GameBoard,
                         QuizQuestion, UserProfile)
@@ -36,6 +36,24 @@ STOP_COINS = {
     "ar": 20,
     "geoguessr": 10
 }
+
+
+def _progress_from_board(board: GameBoard) -> int:
+    total = len(board.stops)
+    if total == 0:
+        return 0
+    completed = sum(1 for s in board.stops if s.completed)
+    return int((completed / total) * 100)
+
+
+def _group_stops_by_day(board: GameBoard, per_day: int = 3) -> list[dict]:
+    days = []
+    for idx, stop in enumerate(board.stops):
+        day_num = idx // per_day + 1
+        while len(days) < day_num:
+            days.append({"day": len(days) + 1, "stops": []})
+        days[day_num - 1]["stops"].append(stop)
+    return days
 
 
 def _slug(city: str) -> str:
@@ -352,6 +370,22 @@ async def get_user_actions(user_id: str | None = Depends(get_optional_user)):
                 "color": "bg-blue-500/20"
             })
 
+        # 4. Completed trips still allow defending territories
+        completed_games_result = supabase.table("games").select(
+            "id, city, status").eq("created_by",
+                                   user_id).eq("status",
+                                               "completed").execute()
+        completed_games = completed_games_result.data if completed_games_result.data else []
+        if completed_games:
+            first_completed_city = completed_games[0]["city"]
+            actions.append({
+                "type": "defend_completed",
+                "text":
+                f"Difendi i territori conquistati a {first_completed_city}",
+                "icon": "Shield",
+                "color": "bg-yellow-500/20"
+            })
+
         # If no actions, show default suggestions
         if not actions:
             actions = [{
@@ -391,3 +425,88 @@ async def get_user_actions(user_id: str | None = Depends(get_optional_user)):
         }]
 
     return {"actions": actions}
+
+
+@router.get("/user/trips")
+async def get_user_trips(user_id: str = Depends(get_current_user)):
+    """List user's trips (games) with minimal summary."""
+    result = supabase.table("games").select(
+        "id, city, city_slug, status, created_at, board_json").eq(
+            "created_by", user_id).order("created_at", desc=True).execute()
+
+    trips = []
+    for row in result.data or []:
+        try:
+            board = GameBoard(**row.get("board_json", {}))
+            progress = _progress_from_board(board)
+        except Exception:
+            board = None
+            progress = 0
+        trips.append({
+            "id": row["id"],
+            "city": row["city"],
+            "city_slug": row["city_slug"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "progress": progress,
+            "stops_count": len(board.stops) if board else 0
+        })
+
+    return {"trips": trips}
+
+
+@router.get("/{game_id}/overview")
+async def get_game_overview(game_id: str,
+                            user_id: str = Depends(get_current_user)):
+    """Return board, grouped itinerary, and pieces collected for the user."""
+    game_res = supabase.table("games").select(
+        "id, city, city_slug, status, board_json, mode, created_by").eq(
+            "id", game_id).single().execute()
+
+    if not game_res.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    game_row = game_res.data
+    try:
+        board = GameBoard(**game_row["board_json"])
+    except Exception:
+        board = GameBoard(id=game_id,
+                          city=game_row["city"],
+                          city_slug=game_row["city_slug"],
+                          mode=game_row.get("mode", "solo"),
+                          stops=[])
+
+    # Group itinerary by day (3 stops/day fallback)
+    days = _group_stops_by_day(board)
+
+    # Pieces collected per POI
+    poi_ids = [stop.poi.id for stop in board.stops]
+    pieces_map: dict[str, int] = {}
+    if poi_ids:
+        pieces_res = supabase.table("poi_pieces").select(
+            "poi_id, pieces_collected").eq("user_id",
+                                           user_id).in_("poi_id",
+                                                        poi_ids).execute()
+        for row in pieces_res.data or []:
+            pieces_map[row["poi_id"]] = row.get("pieces_collected", 0)
+
+    # Territories for this city
+    territories_res = supabase.table("territories").select(
+        "id, poi_id, active").eq("user_id",
+                                 user_id).eq("city_slug",
+                                             game_row["city_slug"]).execute()
+
+    return {
+        "game": {
+            "id": game_row["id"],
+            "city": game_row["city"],
+            "city_slug": game_row["city_slug"],
+            "status": game_row["status"],
+            "mode": game_row.get("mode", "solo"),
+        },
+        "progress": _progress_from_board(board),
+        "stops": board.stops,
+        "days": days,
+        "pieces": pieces_map,
+        "territories": territories_res.data or []
+    }

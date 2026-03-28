@@ -1,11 +1,9 @@
 "use client";
 
-import { BottomNav } from "@/components/UI/BottomNav";
 import { apiGet } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-    Bell,
     ChevronRight,
     MapPin,
     Search,
@@ -39,11 +37,6 @@ const ITALIAN_CITIES = [
   "Scalea",
 ];
 
-const MOCK_TRIPS = [
-  { city: "Roma", startDate: "Mar 28", endDate: "Mar 31", progress: 65, emoji: "🏛️" },
-  { city: "Firenze", startDate: "Apr 5", endDate: "Apr 8", progress: 30, emoji: "⛪" },
-];
-
 const ICON_MAP: Record<string, typeof Zap> = {
   Zap: Zap,
   Shield: Shield,
@@ -58,18 +51,30 @@ interface Action {
   href?: string;
 }
 
+interface TripSummary {
+  id: string;
+  city: string;
+  city_slug: string;
+  status: string;
+  progress: number;
+  created_at?: string;
+  stops_count?: number;
+}
+
 const CITY_EMOJIS: Record<string, string> = {
   Roma: "🏛️", Firenze: "⛪", Venezia: "🚤", Napoli: "🍕", Milano: "🏙️", Bologna: "🎻",
 };
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, isHydrated, token } = useStore();
+  const { user, isHydrated, token, reset } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [actions, setActions] = useState<Action[]>([]);
   const [loadingActions, setLoadingActions] = useState(true);
+  const [trips, setTrips] = useState<TripSummary[]>([]);
+  const [loadingTrips, setLoadingTrips] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -99,6 +104,12 @@ export default function HomePage() {
         setActions(actionsWithHrefs);
       } catch (error) {
         console.error("Failed to load actions:", error);
+        const msg = (error as Error).message || "";
+        if (msg.includes("API 401")) {
+          reset();
+          router.replace("/auth");
+          return;
+        }
         // Fallback to default action
         setActions([{
           type: "new_quiz",
@@ -117,6 +128,34 @@ export default function HomePage() {
     }
   }, [isHydrated, user, token]);
 
+  // Load trips
+  useEffect(() => {
+    const fetchTrips = async () => {
+      try {
+        if (!token) {
+          setTrips([]);
+          setLoadingTrips(false);
+          return;
+        }
+        const response = await apiGet<{ trips: TripSummary[] }>("/api/game/user/trips", token || undefined);
+        setTrips(response.trips || []);
+      } catch (error) {
+        console.error("Failed to load trips:", error);
+        const msg = (error as Error).message || "";
+        if (msg.includes("API 401")) {
+          reset();
+          router.replace("/auth");
+          return;
+        }
+        setTrips([]);
+      } finally {
+        setLoadingTrips(false);
+      }
+    };
+
+    if (isHydrated && user) fetchTrips();
+  }, [isHydrated, user, token]);
+
   const goToCity = (city: string, mode = "solo") => {
     setShowSuggestions(false);
     router.push(`/board/new?city=${encodeURIComponent(city)}&mode=${mode}`);
@@ -133,16 +172,12 @@ export default function HomePage() {
             <h1 className="font-display text-2xl font-bold">Play The City</h1>
             <p className="text-white/50 text-sm mt-1">Ciao {user.displayName}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex">
             <button
               onClick={() => router.push("/profilo")}
               className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center"
             >
               <Users size={18} className="text-primary-light" />
-            </button>
-            <button className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center relative">
-              <Bell size={18} />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center">3</span>
             </button>
           </div>
         </div>
@@ -208,36 +243,48 @@ export default function HomePage() {
       {/* I tuoi viaggi */}
       <section className="px-4 mb-6">
         <h2 className="font-display text-lg font-semibold mb-3">I tuoi viaggi</h2>
-        <div className="space-y-3">
-          {MOCK_TRIPS.map((trip, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="glass rounded-2xl p-4"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{trip.emoji}</span>
-                  <div>
-                    <h3 className="font-semibold text-sm">{trip.city}</h3>
-                    <p className="text-xs text-white/50">{trip.startDate} - {trip.endDate}</p>
+        {loadingTrips ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : trips.length === 0 ? (
+          <div className="glass rounded-2xl p-4 text-sm text-white/60">
+            Nessun viaggio. Aggiungi una città per iniziare!
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {trips.map((trip, i) => (
+              <motion.button
+                key={trip.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                onClick={() => router.push(`/viaggi/${trip.id}`)}
+                className="w-full text-left glass rounded-2xl p-4"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{CITY_EMOJIS[trip.city] ?? "🗺️"}</span>
+                    <div>
+                      <h3 className="font-semibold text-sm">{trip.city}</h3>
+                      <p className="text-xs text-white/50 capitalize">{trip.status}</p>
+                    </div>
                   </div>
+                  <span className="text-[11px] text-white/40">{trip.stops_count || 0} tappe</span>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-primary-light transition-all"
-                    style={{ width: `${trip.progress}%` }}
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-primary to-primary-light transition-all"
+                      style={{ width: `${trip.progress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-white/60">{trip.progress}%</span>
                 </div>
-                <span className="text-xs font-medium text-white/60">{trip.progress}%</span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+              </motion.button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Azioni da fare */}
@@ -255,6 +302,8 @@ export default function HomePage() {
               
               // Route actions to appropriate pages
               if (action.type === "territories") {
+                href = "/territorio";
+              } else if (action.type === "defend_completed") {
                 href = "/territorio";
               } else if (action.type === "nearby_cities") {
                 href = "/scopri";
@@ -283,7 +332,7 @@ export default function HomePage() {
         )}
       </section>
 
-      <BottomNav />
+      {/* <BottomNav /> */}
     </div>
   );
 }

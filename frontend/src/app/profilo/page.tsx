@@ -6,7 +6,6 @@ import { useStore } from "@/lib/store";
 import { motion } from "framer-motion";
 import {
 	ChevronRight,
-	Coins,
 	Flame, LogOut,
 	MapPin, Puzzle,
 	Settings,
@@ -51,7 +50,6 @@ export default function ProfiloPage() {
     level: user.level || 1,
     xp: user.xp || 0,
     xpNext: 2000,
-    coins: profile?.coins || 0,
     territories: 0,
     totalConquered: 0,
     achievements: [] as string[],
@@ -120,11 +118,6 @@ export default function ProfiloPage() {
 
           {/* Stats row */}
           <div className="flex justify-center gap-6 mt-4">
-            <div className="text-center">
-              <Coins size={18} className="text-yellow-400 mx-auto mb-1" />
-              <p className="font-bold">{userData.coins}</p>
-              <p className="text-[10px] text-white/40">Monete</p>
-            </div>
             <div className="text-center">
               <Shield size={18} className="text-green-400 mx-auto mb-1" />
               <p className="font-bold">{userData.territories}</p>
