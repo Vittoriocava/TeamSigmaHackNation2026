@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import type { MapPOI } from "@/components/Map/GameMap";
 import { PoiQuizModal } from "@/components/Quiz/PoiQuizModal";
 import { apiGet } from "@/lib/api";
+import { BottomNav } from "@/components/UI/BottomNav";
 
 const GameMap = dynamic(
   () => import("@/components/Map/GameMap").then((m) => m.GameMap),
@@ -61,7 +62,7 @@ export default function ViaggioPage() {
   const params = useParams();
   const city = decodeURIComponent(params.city as string);
   const router = useRouter();
-  const { currentGame, savedItineraries, token, user, completeStop } = useStore();
+  const { currentGame, savedItineraries, token, user, profile, completeStop } = useStore();
 
   const isActive = currentGame?.city === city;
   const savedItinerary = savedItineraries.find((s) => s.city === city);
@@ -70,6 +71,7 @@ export default function ViaggioPage() {
   const [defending, setDefending] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState(0);
   const [mapExpanded, setMapExpanded] = useState(false);
+  const [profilePois, setProfilePois] = useState<MapPOI[]>([]);
 
   useEffect(() => {
     const slug = city.toLowerCase().replace(/ /g, "-").replace(/'/g, "");
@@ -80,6 +82,29 @@ export default function ViaggioPage() {
       .then((d) => setTerritories(d.territories ?? []))
       .catch(() => {});
   }, [city, token]);
+
+  // Fetch profile-based POI suggestions
+  useEffect(() => {
+    if (!profile?.interests?.length) return;
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    fetch(`${API}/api/city/${encodeURIComponent(city)}/profile-pois?interests=${profile.interests.join(",")}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const existing = new Set((currentGame?.stops || []).map((s) => s.poi.id));
+        const suggestions: MapPOI[] = (d.pois || []).filter(
+          (p: { id: string; lat: number; lng: number }) => !existing.has(p.id) && p.lat && p.lng
+        ).map((p: { id: string; name: string; lat: number; lng: number }) => ({
+          id: p.id,
+          name: p.name,
+          lat: p.lat,
+          lng: p.lng,
+          status: "poi-suggestion" as const,
+        }));
+        setProfilePois(suggestions);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city, profile?.interests]);
 
   const handleDefend = async (poiId: string) => {
     if (!token) return;
@@ -139,20 +164,23 @@ export default function ViaggioPage() {
   const currentStopIdx = game.currentStopIndex;
   const currentStop = game.stops[currentStopIdx];
 
-  const mapPois: MapPOI[] = game.stops.map((s, i) => ({
-    id: s.poi.id,
-    name: s.poi.name,
-    lat: s.poi.lat,
-    lng: s.poi.lng,
-    status: s.completed ? "conquered" : i === currentStopIdx ? "current" : "fog",
-    type: s.type,
-  }));
+  const mapPois: MapPOI[] = [
+    ...game.stops.map((s, i) => ({
+      id: s.poi.id,
+      name: s.poi.name,
+      lat: s.poi.lat,
+      lng: s.poi.lng,
+      status: (s.completed ? "conquered" : i === currentStopIdx ? "current" : "fog") as MapPOI["status"],
+      type: s.type,
+    })),
+    ...profilePois,
+  ];
 
   const completedCount = game.stops.filter((s) => s.completed).length;
   const StopIcon = currentStop ? (STOP_ICONS[currentStop.type] ?? MapPin) : MapPin;
 
   return (
-    <div className="min-h-screen pb-8">
+    <div className="min-h-screen pb-24">
       {/* Header */}
       <header className="px-4 pt-12 pb-3 sticky top-0 z-20 bg-black/70 backdrop-blur-md">
         <div className="flex items-center gap-3">
@@ -334,6 +362,9 @@ export default function ViaggioPage() {
           })}
         </div>
       </div>
+
+      {/* Bottom nav */}
+      <BottomNav />
     </div>
   );
 }
@@ -391,13 +422,14 @@ function FutureTripView({
   const mapPois: MapPOI[] = (savedItinerary.pois ?? [])
     .filter((p) => p.lat !== 0 && p.lng !== 0)
     .map((p) => {
+      const pieces = piecesMap[p.id] ?? 0;
       const inCurrentDay = currentDay?.stops.some((s) => s.poi_id === p.id);
       return {
         id: p.id,
         name: p.name,
         lat: p.lat,
         lng: p.lng,
-        status: inCurrentDay ? "current" : "fog",
+        status: pieces >= 3 ? "conquered" : inCurrentDay ? "current" : "fog",
       };
     });
 
@@ -431,7 +463,7 @@ function FutureTripView({
       )}
     </AnimatePresence>
 
-    <div className="min-h-screen pb-32">
+    <div className="min-h-screen pb-40">
       {/* Header */}
       <header className="px-4 pt-12 pb-3 sticky top-0 z-20 bg-black/70 backdrop-blur-md">
         <div className="flex items-center gap-3">
@@ -677,6 +709,8 @@ function FutureTripView({
           Modalità gioco attivata · GPS + AR + Quiz
         </p>
       </div>
+    {/* Bottom nav */}
+    <BottomNav />
     </div>
     </>
   );

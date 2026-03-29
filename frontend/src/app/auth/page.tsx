@@ -8,7 +8,7 @@ import { useState } from "react";
 
 export default function AuthPage() {
   const router = useRouter();
-  const { setUser, setToken } = useStore();
+  const { setUser, setToken, reset } = useStore();
   const [mode, setMode] = useState<"login" | "register">("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,6 +30,9 @@ export default function AuthPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Errore registrazione");
+
+        // Clear old session data for fresh account
+        reset();
 
         setUser({
           id: data.user.id,
@@ -59,6 +62,9 @@ export default function AuthPage() {
           xp: data.user.xp,
         });
         setToken(data.token);
+        // Clear stale trip data from previous sessions
+        useStore.getState().setCurrentGame(null);
+        useStore.setState({ savedItineraries: [] });
         router.push("/");
       }
     } catch (err: unknown) {

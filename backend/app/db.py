@@ -166,6 +166,27 @@ CREATE TABLE IF NOT EXISTS user_pieces (
     pieces_collected INTEGER DEFAULT 0,
     UNIQUE(user_id, poi_id)
 );
+
+CREATE TABLE IF NOT EXISTS weekly_challenges (
+    id TEXT PRIMARY KEY,
+    city_slug TEXT NOT NULL,
+    poi_id TEXT NOT NULL,
+    poi_name TEXT NOT NULL,
+    hint TEXT DEFAULT '',
+    week_start TEXT NOT NULL,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS weekly_challenge_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    challenge_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    verified INTEGER DEFAULT 0,
+    xp_earned INTEGER DEFAULT 0,
+    submitted_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(challenge_id, user_id)
+);
 """
 
 

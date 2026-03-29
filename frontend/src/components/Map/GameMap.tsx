@@ -11,7 +11,7 @@ export interface MapPOI {
   name: string;
   lat: number;
   lng: number;
-  status: "fog" | "conquered" | "decaying" | "enemy" | "current";
+  status: "fog" | "conquered" | "decaying" | "enemy" | "current" | "poi-suggestion";
   type?: string;
 }
 
@@ -32,6 +32,7 @@ const STATUS_COLORS: Record<string, string> = {
   decaying: "#F59E0B",
   enemy: "#EF4444",
   current: "#6C3CE1",
+  "poi-suggestion": "#06B6D4",
 };
 
 export function GameMap({
@@ -239,14 +240,15 @@ export function GameMap({
 
     pois.forEach((poi) => {
       const color = STATUS_COLORS[poi.status] || STATUS_COLORS.fog;
+      const isSuggestion = poi.status === "poi-suggestion";
 
       const marker = L.circleMarker([poi.lat, poi.lng], {
-        pane: "poiPane",
-        radius: poi.status === "current" ? 12 : 8,
+        pane: isSuggestion ? "userPane" : "poiPane",
+        radius: isSuggestion ? 5 : poi.status === "current" ? 12 : 8,
         fillColor: color,
-        fillOpacity: 0.9,
-        color: "#ffffff",
-        weight: poi.status === "current" ? 3 : 2,
+        fillOpacity: isSuggestion ? 0.7 : 0.9,
+        color: isSuggestion ? "#06B6D4" : "#ffffff",
+        weight: isSuggestion ? 1 : poi.status === "current" ? 3 : 2,
         opacity: 1,
       }).addTo(map);
 

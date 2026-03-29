@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, Volume2, Camera, Clock, MapPin,
-  Shield, Star, Share2, Puzzle, Loader, HelpCircle,
+  Shield, Star, Share2, Puzzle, Loader, HelpCircle, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/UI/Button";
 import { Card } from "@/components/UI/Card";
@@ -50,6 +50,13 @@ export default function TappaPage() {
   const [greeted, setGreeted] = useState(false);
   const [phraseInput, setPhraseInput] = useState("");
   const [showPhraseModal, setShowPhraseModal] = useState(false);
+  const [arPhase, setArPhase] = useState<"idle" | "camera" | "processing" | "result">("idle");
+  const [arResult, setArResult] = useState<{ analysis: Record<string, unknown>; historical_image: Record<string, unknown> } | null>(null);
+  const [arError, setArError] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [arEra, setArEra] = useState("1200");
 
   // Look up POI from store: trip.rankedPois → currentGame.stops → savedItineraries
   const poi = (() => {
@@ -491,37 +498,190 @@ export default function TappaPage() {
                 exit={{ opacity: 0 }}
                 className="space-y-3"
               >
-                <Card className="text-center py-8">
-                  <Camera size={40} className="text-primary-light mx-auto mb-3" />
-                  <h3 className="font-display text-lg font-bold mb-1">
-                    Indietro nel tempo
-                  </h3>
-                  <p className="text-sm text-white/60">
-                    Scatta una foto e vedi il luogo nel passato
-                  </p>
-                  <Button className="mt-4">Apri Fotocamera</Button>
-                </Card>
+                {/* Era selector */}
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {["100 d.C.", "1200", "1800", "1950"].map((era) => (
+                    <button
+                      key={era}
+                      onClick={() => setArEra(era)}
+                      className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+                        arEra === era ? "bg-primary text-white" : "glass text-white/60"
+                      }`}
+                    >
+                      {era}
+                    </button>
+                  ))}
+                </div>
 
-                <Card className="text-center py-8">
-                  <span className="text-4xl block mb-3">🤳</span>
-                  <h3 className="font-display text-lg font-bold mb-1">
-                    Foto col Monumento
-                  </h3>
-                  <p className="text-sm text-white/60">
-                    Fatti un selfie e viaggia nel tempo
-                  </p>
-                  <Button variant="secondary" className="mt-4">
-                    Scatta Souvenir
-                  </Button>
-                </Card>
+                {arPhase === "idle" && (
+                  <Card className="text-center py-8">
+                    <Camera size={40} className="text-primary-light mx-auto mb-3" />
+                    <h3 className="font-display text-lg font-bold mb-1">
+                      Indietro nel tempo
+                    </h3>
+                    <p className="text-sm text-white/60 mb-1">
+                      Scatta una foto di {poi.name} e vedi come appariva nel {arEra}
+                    </p>
+                    <Button
+                      className="mt-4"
+                      onClick={async () => {
+                        try {
+                          const stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+                          });
+                          streamRef.current = stream;
+                          setArPhase("camera");
+                          setTimeout(() => {
+                            if (videoRef.current) {
+                              videoRef.current.srcObject = stream;
+                              videoRef.current.play();
+                            }
+                          }, 100);
+                        } catch {
+                          setArError("Impossibile accedere alla fotocamera");
+                        }
+                      }}
+                    >
+                      📷 Apri Fotocamera
+                    </Button>
+                  </Card>
+                )}
 
-                <Card className="text-center py-4">
-                  <Share2 size={20} className="text-white/50 mx-auto mb-2" />
-                  <p className="text-xs text-white/50">
-                    Le foto AR hanno il watermark Play The City e sono
-                    condivisibili
-                  </p>
-                </Card>
+                {arPhase === "camera" && (
+                  <Card className="overflow-hidden p-0">
+                    <div className="relative">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full aspect-[4/3] object-cover"
+                      />
+                      <canvas ref={canvasRef} className="hidden" />
+                      <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2 bg-gradient-to-t from-black/80 to-transparent">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            streamRef.current?.getTracks().forEach((t) => t.stop());
+                            setArPhase("idle");
+                          }}
+                        >
+                          Annulla
+                        </Button>
+                        <Button
+                          className="flex-1"
+                          onClick={async () => {
+                            if (!videoRef.current || !canvasRef.current) return;
+                            const video = videoRef.current;
+                            const canvas = canvasRef.current;
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            canvas.getContext("2d")!.drawImage(video, 0, 0);
+                            const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+                            streamRef.current?.getTracks().forEach((t) => t.stop());
+                            setArPhase("processing");
+                            try {
+                              const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                              const res = await fetch(`${API}/api/ai/vision/come-era`, {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                },
+                                body: JSON.stringify({
+                                  image_base64: base64,
+                                  poi_id: poiId,
+                                  poi_name: poi.name,
+                                  era: arEra,
+                                }),
+                              });
+                              if (!res.ok) throw new Error("Errore Vision AI");
+                              const data = await res.json();
+                              setArResult(data);
+                              setArPhase("result");
+                            } catch {
+                              setArError("Errore nell'analisi. Riprova.");
+                              setArPhase("idle");
+                            }
+                          }}
+                        >
+                          📸 Scatta e analizza
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {arPhase === "processing" && (
+                  <Card className="text-center py-12">
+                    <Loader2 size={36} className="animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-sm text-white/60">Analisi AI in corso...</p>
+                    <p className="text-[10px] text-white/30 mt-1">
+                      Ricostruisco {poi.name} nel {arEra}
+                    </p>
+                  </Card>
+                )}
+
+                {arPhase === "result" && arResult && (
+                  <div className="space-y-3">
+                    {/* AI Analysis */}
+                    <Card>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <Camera size={14} className="text-primary-light" />
+                        Analisi AI
+                      </h4>
+                      <p className="text-xs text-white/70 leading-relaxed">
+                        {(arResult.analysis as Record<string, string>)?.description || "Luogo identificato"}
+                      </p>
+                      {Boolean((arResult.analysis as Record<string, unknown>)?.identified) && (
+                        <p className="text-[10px] text-green-400 mt-2">
+                          ✓ Luogo riconosciuto: {String((arResult.analysis as Record<string, string>)?.place_name || "")}
+                        </p>
+                      )}
+                    </Card>
+
+                    {/* Historical reconstruction prompt */}
+                    <Card>
+                      <h4 className="text-sm font-semibold mb-2">🏛️ Ricostruzione storica — {arEra}</h4>
+                      {(arResult.historical_image as Record<string, string>)?.image_url ? (
+                        <img
+                          src={(arResult.historical_image as Record<string, string>).image_url}
+                          alt={`${poi.name} nel ${arEra}`}
+                          className="w-full rounded-xl mb-2"
+                        />
+                      ) : (
+                        <div className="bg-white/5 rounded-xl p-4 mb-2">
+                          <p className="text-xs text-white/50 italic">
+                            {(arResult.historical_image as Record<string, string>)?.dalle_prompt || "Prompt di ricostruzione generato"}
+                          </p>
+                        </div>
+                      )}
+                    </Card>
+
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setArPhase("idle");
+                        setArResult(null);
+                      }}
+                    >
+                      📷 Scatta un'altra foto
+                    </Button>
+                  </div>
+                )}
+
+                {arError && (
+                  <div className="glass rounded-xl p-3 text-center">
+                    <p className="text-sm text-red-400">{arError}</p>
+                    <button
+                      onClick={() => setArError("")}
+                      className="text-xs text-white/40 mt-2 underline"
+                    >
+                      Chiudi
+                    </button>
+                  </div>
+                )}
               </motion.div>
             )}
 
