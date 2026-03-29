@@ -89,6 +89,9 @@ function BoardContent() {
   const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [completedStops, setCompletedStops] = useState<Set<number>>(new Set());
+  const [character, setCharacter] = useState<{ name: string; period: string; role: string; avatar_emoji: string; quote: string; story: string; poi_hint: string } | null>(null);
+  const [characterExpanded, setCharacterExpanded] = useState(false);
+  const [narratingStop, setNarratingStop] = useState<"idle" | "loading" | "playing">("idle");
 
   useEffect(() => {
     // If we have a local game ID (from create-demo), use the board stored in Zustand
@@ -161,6 +164,17 @@ function BoardContent() {
     generate();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, city, mode, profile, token, currentGame]);
+
+  // Load character of the day when game city is known
+  useEffect(() => {
+    if (!game?.city) return;
+    const citySlug = (game.city_slug || game.city).toLowerCase().replace(/ /g, "-").replace(/'/g, "");
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    fetch(`${API}/api/city/character/${citySlug}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.character) setCharacter(d.character); })
+      .catch(() => {});
+  }, [game?.city, game?.city_slug]);
 
   const handleComplete = () => {
     setCompletedStops((prev) => new Set([...prev, currentStop]));
@@ -259,6 +273,52 @@ function BoardContent() {
         </div>
       </header>
 
+      {/* Personaggio del Giorno */}
+      {character && (
+        <section className="px-4 mb-4">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-2xl overflow-hidden border border-primary/20"
+          >
+            <button
+              className="w-full p-3 flex items-center gap-3 text-left"
+              onClick={() => setCharacterExpanded(!characterExpanded)}
+            >
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-xl flex-shrink-0">
+                {character.avatar_emoji}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-[10px] text-primary-light font-semibold uppercase tracking-wide">Personaggio del Giorno</span>
+                </div>
+                <p className="text-sm font-bold truncate">{character.name}</p>
+                <p className="text-[10px] text-white/50">{character.role} · {character.period}</p>
+              </div>
+              <ChevronDown size={14} className={`text-white/40 flex-shrink-0 transition-transform ${characterExpanded ? "rotate-180" : ""}`} />
+            </button>
+            <AnimatePresence>
+              {characterExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-4 pb-4 space-y-2">
+                    <p className="text-xs text-primary-light italic">&ldquo;{character.quote}&rdquo;</p>
+                    <p className="text-sm text-white/80 leading-relaxed">{character.story}</p>
+                    {character.poi_hint && (
+                      <p className="text-[10px] text-white/40">📍 Luogo associato: {character.poi_hint}</p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </section>
+      )}
+
       {/* Map */}
       <section className="px-4 mb-4">
         <motion.div animate={{ height: mapExpanded ? 350 : 180 }} className="relative overflow-hidden rounded-2xl">
@@ -326,8 +386,63 @@ function BoardContent() {
                   <p className="text-sm text-white/80 leading-relaxed">
                     {(stop.content.story as string) || (stop.content.description as string) || stop.poi.description}
                   </p>
-                  <Button variant="ghost" size="sm" className="mt-3 flex items-center gap-2">
-                    <Volume2 size={14} /> Ascolta narrazione
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 flex items-center gap-2"
+                    disabled={narratingStop === "loading"}
+                    onClick={async () => {
+                      if (narratingStop === "playing") {
+                        const audio = document.getElementById("board-narration-audio") as HTMLAudioElement;
+                        if (audio) { audio.pause(); audio.currentTime = 0; }
+                        setNarratingStop("idle");
+                        return;
+                      }
+                      if (narratingStop === "loading") return;
+                      setNarratingStop("loading");
+                      try {
+                        const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                        const res = await fetch(`${API}/api/audio/narrate`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                          body: JSON.stringify({
+                            poi_id: stop.poi.id,
+                            poi_name: stop.poi.name,
+                            city: game.city,
+                            mode: "on_demand",
+                            wikipedia_excerpt: stop.poi.description || "",
+                            wikidata_facts: (stop.content.story as string) || "",
+                            user_profile: { language: "it", cultural_level: profile?.culturalLevel || "casual", interests: profile?.interests || ["storia"] },
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.audio_base64) {
+                          let audio = document.getElementById("board-narration-audio") as HTMLAudioElement;
+                          if (!audio) {
+                            audio = document.createElement("audio");
+                            audio.id = "board-narration-audio";
+                            document.body.appendChild(audio);
+                          }
+                          audio.src = `data:audio/mpeg;base64,${data.audio_base64}`;
+                          audio.onended = () => setNarratingStop("idle");
+                          audio.onpause = () => setNarratingStop("idle");
+                          await audio.play();
+                          setNarratingStop("playing");
+                        } else {
+                          setNarratingStop("idle");
+                        }
+                      } catch {
+                        setNarratingStop("idle");
+                      }
+                    }}
+                  >
+                    {narratingStop === "loading" ? (
+                      <><AlertCircle size={14} className="animate-pulse" /> Caricamento audio...</>
+                    ) : narratingStop === "playing" ? (
+                      <><Volume2 size={14} className="text-primary-light" /> Stop narrazione</>
+                    ) : (
+                      <><Volume2 size={14} /> Ascolta narrazione</>
+                    )}
                   </Button>
                 </div>
               )}
@@ -402,15 +517,28 @@ function BoardContent() {
                 </div>
               )}
 
-              {!completedStops.has(currentStop) && (
+              <div className="flex gap-2 mt-4">
                 <Button
-                  onClick={handleComplete}
-                  className="w-full mt-4"
-                  disabled={stop.type === "quiz" && quizAnswer === null}
+                  variant="ghost"
+                  size="sm"
+                  className="flex-shrink-0"
+                  onClick={() => {
+                    const q = new URLSearchParams({ name: stop.poi.name, city: game.city });
+                    router.push(`/tappa/${stop.poi.id}?${q}`);
+                  }}
                 >
-                  {stop.type === "ar" || stop.type === "challenge" ? "📸 Apri Fotocamera" : "Completa Tappa →"}
+                  🔍 Esplora
                 </Button>
-              )}
+                {!completedStops.has(currentStop) && (
+                  <Button
+                    onClick={handleComplete}
+                    className="flex-1"
+                    disabled={stop.type === "quiz" && quizAnswer === null}
+                  >
+                    {stop.type === "ar" || stop.type === "challenge" ? "📸 Fotocamera" : "Completa →"}
+                  </Button>
+                )}
+              </div>
               {completedStops.has(currentStop) && (
                 <div className="mt-4 text-center text-green-400 text-sm font-medium">✓ Tappa completata!</div>
               )}

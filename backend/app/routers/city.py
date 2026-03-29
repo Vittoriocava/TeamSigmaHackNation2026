@@ -1,8 +1,12 @@
+import asyncio
 import math
+from datetime import date
+from urllib.parse import quote
 
 import httpx
-from app.models import UserProfile
-from app.services.ai import rank_pois
+from app.models import POI, UserProfile
+from app.services.ai import (generate_city_character, generate_curiosity,
+                              generate_story, rank_pois)
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/api/city", tags=["city"])
@@ -857,3 +861,63 @@ async def get_profile_pois(city_name: str, interests: str = ""):
     # Return top 8 matches, or fall back to first 5
     result = scored[:8] if scored else all_pois[:5]
     return {"city": city_name, "pois": result, "matched_interests": interest_list}
+
+
+async def _fetch_poi_image(name: str, city: str) -> str:
+    """Try Italian then English Wikipedia for a place thumbnail."""
+    candidates = [name, f"{name} {city}".strip()]
+    async with httpx.AsyncClient(timeout=8) as client:
+        for query in candidates:
+            encoded = quote(query.replace(" ", "_"), safe="")
+            for lang in ("it", "en"):
+                try:
+                    resp = await client.get(
+                        f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{encoded}",
+                        headers={"User-Agent": "PlayTheCity/1.0 (hacknation2026)"},
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        src = (data.get("originalimage") or data.get("thumbnail") or {}).get("source", "")
+                        if src:
+                            return src
+                except Exception:
+                    pass
+    return ""
+
+
+@router.get("/poi-enrich")
+async def enrich_poi(poi_name: str, city: str = "", poi_id: str = "", description: str = ""):
+    """Return Wikipedia image + AI story + curiosity for a POI."""
+    image_url = await _fetch_poi_image(poi_name, city)
+
+    poi_obj = POI(
+        id=poi_id or "temp",
+        name=poi_name,
+        lat=0,
+        lng=0,
+        description=description or f"Un luogo significativo di {city or 'Italia'}",
+    )
+    profile = UserProfile(
+        interests=["storia", "cultura", "arte"],
+        cultural_level="casual",
+        language="it",
+    )
+    city_name = city or "Italia"
+    story, curiosity = await asyncio.gather(
+        generate_story(poi_obj, profile, city_name),
+        generate_curiosity(poi_obj, profile),
+    )
+    return {"image_url": image_url, "story": story, "curiosity": curiosity}
+
+
+@router.get("/character/{city_slug}")
+async def get_city_character(city_slug: str):
+    """Return the 'character of the day' for a given city — a historical figure."""
+    # Normalise slug to city name for the prompt
+    city_name = city_slug.replace("-", " ").replace("_", " ").title()
+    today = date.today().isoformat()
+    try:
+        character = await generate_city_character(city_name, today)
+        return {"city": city_name, "character": character, "date": today}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
