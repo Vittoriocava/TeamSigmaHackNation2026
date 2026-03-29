@@ -332,7 +332,7 @@ export default function PianificaPage() {
       </div>
 
       {/* CTA */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 pb-8 pt-4 bg-gradient-to-t from-black/80 to-transparent">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-8 pt-4 bg-gradient-to-t from-black/80 to-transparent">
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={handleNext}

@@ -137,7 +137,7 @@ export default function ItinerarioPage() {
       {/* Header */}
       <header className="px-4 pt-12 pb-4 sticky top-0 z-10 bg-black/60 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="w-10 h-10 rounded-full glass flex items-center justify-center">
+          <button onClick={() => router.push("/")} className="w-10 h-10 rounded-full glass flex items-center justify-center">
             <ChevronLeft size={20} />
           </button>
           <div className="flex-1">
@@ -298,7 +298,7 @@ export default function ItinerarioPage() {
 
       {/* CTA */}
       {!loading && days.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 px-4 pb-8 pt-4 bg-gradient-to-t from-black/80 to-transparent">
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-8 pt-4 bg-gradient-to-t from-black/80 to-transparent">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={startAdventure}

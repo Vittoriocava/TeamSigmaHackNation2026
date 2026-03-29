@@ -116,7 +116,7 @@ export function PoiQuizModal({ poiId, poiName, poiDescription, city, token, onCl
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(result?.pieces_total); }}
     >
       <motion.div
@@ -124,7 +124,7 @@ export function PoiQuizModal({ poiId, poiName, poiDescription, city, token, onCl
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 300 }}
-        className="bg-[#0f0f1a] rounded-t-3xl max-h-[92vh] overflow-y-auto"
+        className="bg-[#0f0f1a] rounded-t-3xl max-h-[92vh] overflow-y-auto w-full max-w-md"
       >
         {/* Handle + header */}
         <div className="px-4 pt-3 pb-4 border-b border-white/8">

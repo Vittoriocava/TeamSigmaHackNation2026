@@ -107,7 +107,7 @@ export default function ViaggioPage() {
         >
           Pianifica un viaggio a {city}
         </button>
-        <button onClick={() => router.back()} className="text-white/30 text-xs">
+        <button onClick={() => router.push("/")} className="text-white/30 text-xs">
           ← Torna indietro
         </button>
       </div>
@@ -123,7 +123,7 @@ export default function ViaggioPage() {
         territories={territories}
         token={token}
         userId={user?.id}
-        onBack={() => router.back()}
+        onBack={() => router.push("/")}
         onStartAdventure={() =>
           router.push(`/board/new?city=${encodeURIComponent(city)}&mode=solo`)
         }
@@ -156,7 +156,7 @@ export default function ViaggioPage() {
       {/* Header */}
       <header className="px-4 pt-12 pb-3 sticky top-0 z-20 bg-black/70 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="glass rounded-full p-2 flex-shrink-0">
+          <button onClick={() => router.push("/")} className="glass rounded-full p-2 flex-shrink-0">
             <ChevronLeft size={20} />
           </button>
           <div className="flex-1 min-w-0">
@@ -665,7 +665,7 @@ function FutureTripView({
       </AnimatePresence>
 
       {/* Sticky CTA */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 pb-8 pt-3 bg-gradient-to-t from-black/90 to-transparent z-20">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-8 pt-3 bg-gradient-to-t from-black/90 to-transparent z-20">
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onStartAdventure}

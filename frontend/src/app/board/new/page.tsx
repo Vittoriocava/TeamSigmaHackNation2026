@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { Button } from "@/components/UI/Button";
 import { Card } from "@/components/UI/Card";
 import { useStore, BoardStop, RankedPOI } from "@/lib/store";
@@ -43,7 +44,7 @@ function buildStopsFromPois(pois: RankedPOI[], mode: string): BoardStop[] {
   });
 }
 
-export default function NewBoardPage() {
+function NewBoardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryCity = searchParams.get("city");
@@ -254,5 +255,17 @@ export default function NewBoardPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function NewBoardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader size={40} className="animate-spin text-primary" />
+      </div>
+    }>
+      <NewBoardContent />
+    </Suspense>
   );
 }

@@ -207,7 +207,7 @@ export default function HomePage() {
             <AnimatePresence>
               {viaggi.map((v, i) => (
                 <motion.button
-                  key={`${v.city}-${v.status}`}
+                  key={`${v.city}-${v.status}-${i}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.07 }}
