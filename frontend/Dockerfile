@@ -1,0 +1,29 @@
+# Multi-stage build for Next.js frontend
+FROM node:20-slim AS deps
+WORKDIR /app
+COPY package.json package-lock.json* .npmrc* ./
+RUN npm install --production=false
+
+FROM node:20-slim AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM node:20-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+# Set Next.js port
+ENV PORT=3000
+# Prevent Next telemetry in container
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Copy built assets and minimal files
+COPY --from=build /app/next.config.ts ./next.config.ts
+COPY --from=build /app/public ./public
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
