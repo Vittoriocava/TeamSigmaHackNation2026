@@ -1,12 +1,11 @@
 "use client";
 
-import { Suspense } from "react";
 import { Button } from "@/components/UI/Button";
 import { Card } from "@/components/UI/Card";
-import { useStore, BoardStop, RankedPOI } from "@/lib/store";
+import { BoardStop, RankedPOI, useStore } from "@/lib/store";
 import { AlertCircle, ChevronRight, Loader } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 interface City {
   name: string;

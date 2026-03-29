@@ -14,8 +14,8 @@ RUN npm run build
 FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# Set Next.js port
-ENV PORT=3000
+# Set Next.js port (Railway/GCP typically inject PORT)
+ENV PORT=8080
 ENV HOST=0.0.0.0
 # Prevent Next telemetry in container
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -26,6 +26,6 @@ COPY --from=build /app/public ./public
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/package*.json ./
 
-EXPOSE 3000
+EXPOSE 8080
 
-CMD ["sh", "-c", "HOST=${HOST:-0.0.0.0} PORT=${PORT:-3000} npm run start"]
+CMD ["sh", "-c", "HOST=${HOST:-0.0.0.0} PORT=${PORT:-8080} npm run start"]
