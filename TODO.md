@@ -1,54 +1,375 @@
-Le notifiche non fanno nulla, le toglierei
-Scopri ora non fa nulla, è hardcoded, rendi interattivo
-Giocatori attivi non serve
-I tuoi interessi sono hardcoded, deve profilare veramente
-La classifica è reale?
-Se ci sono altre cose hardcoded, è da renderle reali
+# TODO — Play The City
 
-- [ ] togliere navbar da altre pagine
-- [ ] manca la pagina della città per i viaggi attivi:
-    - [ ] rimmettere navbar (bottom)
-    - [ ] mappa, itinerario per giorno, posti da scoprire, posti conquistati (mappa che si scopre quando passeggio)
-    - [ ] in questa mappa  oltre posti conquistati anche posti piccoli di nostro interesse in base a profilo
+## ✅ Completati
 
-    - [ ] audioguida dei posti (elevenlabs) in cui apri posto e te lo racconta.
+- [x] Fix bottoni in basso troppo larghi su PC (max-width container)
+- [x] Fix errore console chiave duplicata `Venezia-futuro`
+- [x] Togliere navbar da pagine dove non serve
+- [x] Interessi profilo reali (non hardcoded)
+- [x] Classifica reale (fetch da API)
+- [x] Territorio reale (fetch da API)
+- [x] Tappa pezzi: mostrare pezzi conquistati, quiz funzionante, rimosso GeoGuessr
+- [x] Tasto indietro dopo scelta itinerario → home
+- [x] Fix Suspense boundary su `/board/new`
 
-pagina del posto:
-- [ ] se posto conquistato possiamo decidere di mostrare una frase o qualcosa di tuo per personalizzarlo
-- [ ] se è un posto conquistato da altri, vedi la frase e puoi mettere like o saluto
-- [ ] se saluti o vieni salutato prendi punti
-- [ ] se è un posto non conquistato lo puoi conquistare se hai i pezzi. il possesso dura 1 mese, poi ogni settimana che passa si abbasssa di livello le domande dei quiz, per rubare un posto devi fare tutte le domande, altrimenti lo prendi subito se hai fatto le domande a casa e hai i pezzi. 4 livelli di domande e ogni settimana che passa si abbassa di livello la difficoltà del livello, al livello 1 le domande sono molto facili. NON DEVONO RICAPITARE STESSE DOMANDE, quindi devi salvare quelle già usate)
-- [ ] altra tab con indietro nel tempo tramite agente e foto, da rimuovere "come era nella tab AR".
+---
 
-pagina nella citta:
-- [ ] fai sfida del luogo da trovare, ogni settimana cambia, devi fare foto a questo luogo e agente ai dice se è corretto o no, controllato da agente, e questo ti dà XP i primi che la trovano fanno più XP.
+## 🔶 Category B — Feature Medie
 
+- [ ] **B1**: "Scopri ora" — rendere interattivo (attualmente hardcoded)
+- [x] **B2**: Rimuovere notifiche se non fanno nulla
+- [ ] **B3**: Non ripetere posti dopo la scelta dell'itinerario
 
-itinerario dopo la scelta:
-- [ ] no ripetere posti dopo la scelta
+---
 
+## 🔴 Category C — Feature Grandi
 
-altro
-fixare bottoni in basso troppo larghi come pc 
-- [ ] tasto per la fine della scelta il tasto indietro deve portarti alla home
-## Error Type
-Console Error
+### C1 — Pagina città per viaggi attivi
+- [ ] Navbar bottom nella pagina città
+- [ ] Mappa con itinerario per giorno
+- [ ] Posti da scoprire + posti conquistati (mappa che si scopre camminando)
 
-## Error Message
-Encountered two children with the same key, `Venezia-futuro`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+### C2 — Audioguida (ElevenLabs)
+- [ ] Integrazione ElevenLabs per narrazione audio dei posti
+- [ ] Apri posto → te lo racconta con voce AI
 
+### C3 — Posti di interesse su mappa in base a profilo
+- [ ] Nella mappa, oltre ai posti conquistati, mostrare POI piccoli basati sul profilo utente
 
-    at HomePage (src/app/page.tsx:207:13)
+### C4 — Frase personalizzata + sistema like/saluti
+- [ ] Se posto conquistato: mostrare frase personalizzata del conquistatore
+- [ ] Se posto conquistato da altri: vedere la frase, mettere like o saluto
+- [ ] Saluti/like danno punti
 
-## Code Frame
-  205 |         ) : (
-  206 |           <div className="space-y-3">
-> 207 |             <AnimatePresence>
-      |             ^
-  208 |               {viaggi.map((v, i) => (
-  209 |                 <motion.button
-  210 |                   key={`${v.city}-${v.status}`}
+### C5 — Conquista territorio + quiz a 4 livelli di difficoltà
+- [ ] Conquista posto se hai i pezzi
+- [ ] Possesso dura 1 mese
+- [ ] Ogni settimana si abbassa di 1 livello la difficoltà delle domande (4 livelli)
+- [ ] Al livello 1 le domande sono molto facili
+- [ ] Per rubare un posto: completare tutte le domande del livello attuale
+- [ ] Se hai già fatto le domande da casa e hai i pezzi: conquista immediata
+- [ ] **Non ripetere stesse domande** — salvare quelle già usate nel DB
 
-Next.js version: 15.5.14 (Webpack)
+### C6 — "Indietro nel tempo" con agente AI + foto
+- [ ] Tab "Indietro nel tempo" nella pagina tappa (già rinominata)
+- [ ] Integrazione agente Vision AI  (DALL E) per generare foto del passato
+- [ ] Rimuovere tab AR
 
-- [ ] dentro la tappa in pezzi se sono stati conquistati non li mostra, deve mostrarli (http://localhost:3000/tappa/ai_b9cd16bb20), il quiz dve partire anche da lì e togli geogussr
+### C7 — Sfida settimanale della città (foto recognition)
+- [ ] Ogni settimana cambia il luogo da trovare
+- [ ] Utente scatta foto → agente AI verifica se è corretto
+- [ ] I primi che trovano il luogo guadagnano più XP
+
+### C8 - Merge del codice della mappa che si sblocca
+
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import * as turf from "@turf/turf";
+
+export interface MapPOI {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  status: "fog" | "conquered" | "decaying" | "enemy" | "current";
+  type?: string;
+}
+
+interface GameMapProps {
+  pois: MapPOI[];
+  center: [number, number];
+  zoom?: number;
+  onPoiClick?: (poi: MapPOI) => void;
+  showFog?: boolean;
+  userPosition?: [number, number] | null;
+  className?: string;
+  allowClickMovement?: boolean; // <-- NUOVA PROP (Interruttore per la simulazione)
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  fog: "#6B7280",
+  conquered: "#10B981",
+  decaying: "#F59E0B",
+  enemy: "#EF4444",
+  current: "#6C3CE1",
+};
+
+export function GameMap({
+  pois,
+  center,
+  zoom = 19,
+  onPoiClick,
+  showFog = true,
+  userPosition,
+  className = "",
+  allowClickMovement = true, // Default a false per evitare click accidentali in produzione
+}: GameMapProps) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.CircleMarker[]>([]);
+  const fogLayerRef = useRef<L.GeoJSON | null>(null);
+
+  const [currentPos, setCurrentPos] = useState<[number, number] | null>(userPosition || center);
+  const [exploredAreas, setExploredAreas] = useState<[number, number][]>([]);
+  const [isReady, setIsReady] = useState(false);
+
+  // Sincronizza il GPS vero se cambia
+  useEffect(() => {
+    if (userPosition) setCurrentPos(userPosition);
+  }, [userPosition]);
+
+  // 1. INIZIALIZZAZIONE MAPPA E LIVELLI
+  useEffect(() => {
+    if (!mapRef.current || mapInstance.current) return;
+
+    const map = L.map(mapRef.current, {
+      center,
+      zoom,
+      minZoom: 13,
+      maxZoom: 22,
+      zoomControl: false,
+      attributionControl: false,
+      doubleClickZoom: false,
+      renderer: L.svg({ padding: 5 }), 
+    });
+
+    map.createPane("fogPane");
+    map.getPane("fogPane")!.style.zIndex = "390";
+    
+    map.createPane("poiPane");
+    map.getPane("poiPane")!.style.zIndex = "410";
+    
+    map.createPane("userPane");
+    map.getPane("userPane")!.style.zIndex = "420";
+
+    // CARICAMENTO MAPPA: maxNativeZoom permette di zoomare oltre il limite reale delle immagini (19)
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      maxZoom: 22,
+      maxNativeZoom: 19, 
+      keepBuffer: 8, 
+      updateWhenIdle: false, 
+    }).addTo(map);
+
+    mapInstance.current = map;
+
+    // FIX PER IL BUG DELLE MATTONELLE TAGLIATE (Gray Tile Bug)
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 250);
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(mapRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+      map.remove();
+      mapInstance.current = null;
+      fogLayerRef.current = null; 
+      markersRef.current = [];
+    };
+  }, []);
+
+  // 1.5 SIMULATORE DI MOVIMENTO (Acceso/Spento tramite allowClickMovement)
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map) return;
+
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      setCurrentPos([e.latlng.lat, e.latlng.lng]);
+    };
+
+    if (allowClickMovement) {
+      map.on("click", handleMapClick);
+    } else {
+      map.off("click", handleMapClick);
+    }
+
+    return () => {
+      map.off("click", handleMapClick);
+    };
+  }, [allowClickMovement, isReady]);
+
+  // 2. TRACCIAMENTO AREE ESPLORATE (Passi)
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || !showFog || !currentPos) return;
+
+    setExploredAreas((prev) => {
+      const last = prev[prev.length - 1];
+      if (last) {
+        const dist = map.distance(last, currentPos);
+        if (dist < 25) return prev; 
+      }
+      return [...prev, currentPos];
+    });
+    
+    map.panTo(currentPos, { animate: true, duration: 0.5 });
+  }, [currentPos, showFog]);
+
+  // 3. DISEGNO DEL FOG OF WAR
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || !showFog) {
+      setIsReady(true);
+      return;
+    }
+
+    let fogPolygon = turf.bboxPolygon([-180, -90, 180, 90]);
+    let allHoles: any[] = [];
+
+    // LOGICA A: Passi del giocatore (100m)
+    if (exploredAreas.length > 0) {
+      const walkingCircles = exploredAreas.map((pos) =>
+        turf.circle([pos[1], pos[0]], 100, { units: "meters", steps: 32 })
+      );
+      allHoles = [...allHoles, ...walkingCircles];
+    }
+
+    // LOGICA B (Torre di Zelda): Territori Conquistati (350m)
+    const conqueredPois = pois.filter(p => p.status === "conquered" || p.status === "current");
+    if (conqueredPois.length > 0) {
+      const poiCircles = conqueredPois.map((poi) =>
+        turf.circle([poi.lng, poi.lat], 350, { units: "meters", steps: 64 }) 
+      );
+      allHoles = [...allHoles, ...poiCircles];
+    }
+
+    // LOGICA C (Fari nella Nebbia): Punti liberi o nemici (30m)
+    const unownedPois = pois.filter(p => p.status === "fog" || p.status === "enemy" || p.status === "decaying");
+    if (unownedPois.length > 0) {
+      const smallPoiCircles = unownedPois.map((poi) =>
+        turf.circle([poi.lng, poi.lat], 30, { units: "meters", steps: 32 }) 
+      );
+      allHoles = [...allHoles, ...smallPoiCircles];
+    }
+
+    // FUSIONE E TAGLIO
+    if (allHoles.length > 0) {
+      let mergedExploration = allHoles[0];
+      for (let i = 1; i < allHoles.length; i++) {
+        mergedExploration = turf.union(turf.featureCollection([mergedExploration, allHoles[i]])) as any;
+      }
+
+      try {
+        const featuresToIntersect = turf.featureCollection([
+          fogPolygon as any, 
+          mergedExploration as any
+        ]);
+        const difference = turf.difference(featuresToIntersect as any);
+        
+        if (difference) {
+          fogPolygon = difference as any;
+        }
+      } catch (error) {
+        console.error("Errore nel calcolo della nebbia:", error);
+      }
+    }
+
+    // AGGIORNAMENTO LIVELLO (Senza Flicker)
+    if (!fogLayerRef.current) {
+      fogLayerRef.current = L.geoJSON(fogPolygon, {
+        pane: "fogPane",
+        style: {
+          color: "transparent",
+          fillColor: "#111827",
+          fillOpacity: 0.85,
+        },
+      }).addTo(map);
+    } else {
+      fogLayerRef.current.clearLayers();
+      fogLayerRef.current.addData(fogPolygon);
+    }
+
+    if (!isReady) {
+      setTimeout(() => setIsReady(true), 150);
+    }
+  }, [exploredAreas, showFog, pois]);
+
+  // 4. GESTIONE MARKER POI
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map) return;
+
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    pois.forEach((poi) => {
+      const color = STATUS_COLORS[poi.status] || STATUS_COLORS.fog;
+
+      const marker = L.circleMarker([poi.lat, poi.lng], {
+        pane: "poiPane",
+        radius: poi.status === "current" ? 12 : 8,
+        fillColor: color,
+        fillOpacity: 0.9, 
+        color: "#ffffff",
+        weight: poi.status === "current" ? 3 : 2,
+        opacity: 1,
+      }).addTo(map);
+
+      marker.bindTooltip(poi.name, {
+        permanent: true,
+        direction: "top",
+        className: "bg-gray-900 text-white border-none rounded-lg px-2 py-1 text-xs font-bold",
+      });
+
+      if (onPoiClick) marker.on("click", () => onPoiClick(poi));
+
+      markersRef.current.push(marker);
+    });
+  }, [pois, showFog, onPoiClick]);
+
+  // 5. MARKER DEL GIOCATORE
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || !currentPos) return;
+
+    const userMarker = L.circleMarker(currentPos, {
+      pane: "userPane",
+      radius: 8,
+      fillColor: "#3B82F6",
+      fillOpacity: 1,
+      color: "#ffffff",
+      weight: 3,
+    }).addTo(map);
+
+    const pulse = L.circleMarker(currentPos, {
+      pane: "userPane",
+      radius: 20,
+      fillColor: "#3B82F6",
+      fillOpacity: 0.2,
+      stroke: false,
+    }).addTo(map);
+
+    return () => {
+      userMarker.remove();
+      pulse.remove();
+    };
+  }, [currentPos]);
+
+  return (
+    <div className={`relative w-full h-full rounded-2xl overflow-hidden ${className}`}>
+      {/* LOADING SCREEN */}
+      <div 
+        className={`absolute inset-0 z-50 flex items-center justify-center bg-[#111827] text-white transition-opacity duration-500 pointer-events-none ${
+          isReady ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-sm font-bold tracking-widest text-gray-400 uppercase">Sincronizzazione GPS...</span>
+        </div>
+      </div>
+
+      {/* MAPPA */}
+      <div 
+        ref={mapRef} 
+        className="w-full h-full bg-[#111827] [&_.leaflet-container]:bg-[#111827]" 
+      />
+    </div>
+  );
+}
