@@ -15,9 +15,42 @@ const GameMap = dynamic(
 );
 
 const MOCK_TERRITORIES = [
-  { poi_id: "1", name: "Colosseo", lat: 41.8902, lng: 12.4922, tier: 2, weeks_held: 3, days_left: 5, city: "Roma" },
-  { poi_id: "3", name: "Pantheon", lat: 41.8986, lng: 12.4769, tier: 1, weeks_held: 1, days_left: 2, city: "Roma" },
-  { poi_id: "8", name: "Giardino degli Aranci", lat: 41.8836, lng: 12.4796, tier: 1, weeks_held: 0, days_left: 6, city: "Roma" },
+  {
+    poi_id: "1",
+    name: "Colosseo",
+    lat: 41.8902,
+    lng: 12.4922,
+    tier: 2,
+    weeks_held: 3,
+    days_left: 5,
+    city: "Roma",
+    owner: "TeamA",
+    description: "L'anfiteatro romano più grande, patrimonio UNESCO e simbolo di Roma",
+  },
+  {
+    poi_id: "3",
+    name: "Pantheon",
+    lat: 41.8986,
+    lng: 12.4769,
+    tier: 1,
+    weeks_held: 3,
+    days_left: 5,
+    city: "Roma",
+    owner: "Giulia",
+    description: "Tempio romano magnificamente conservato, capolavoro dell'architettura antica",
+  },
+  {
+    poi_id: "8",
+    name: "Giardino degli Aranci",
+    lat: 41.8836,
+    lng: 12.4796,
+    tier: 1,
+    weeks_held: 0,
+    days_left: 6,
+    city: "Roma",
+    owner: "Nessuno",
+    description: "Belvedere panoramico con vista sulla città, ideale per passeggiate romantiche",
+  },
 ];
 
 const TIER_LABELS: Record<number, { label: string; color: string }> = {
@@ -57,6 +90,36 @@ export default function TerritorioPage() {
           />
         </div>
       </section>
+
+      {/* Selected POI detail card (shows when clicking a marker) */}
+      {selectedTerritory && (
+        (() => {
+          const t = MOCK_TERRITORIES.find((x) => x.poi_id === selectedTerritory);
+          if (!t) return null;
+          return (
+            <section className="px-4 mb-4">
+              <div className="glass rounded-2xl p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-lg">{t.name}</h3>
+                    <p className="text-xs text-white/60">{t.city} · Tier {t.tier}</p>
+                    <p className="mt-2 text-sm text-white/70">{t.description}</p>
+                    <div className="mt-3 text-xs text-white/60 flex items-center gap-3">
+                      <span>Proprietario: <strong className="text-white ml-1">{t.owner}</strong></span>
+                      <span>· Tenuto per: <strong className="text-white ml-1">{t.weeks_held} settimane</strong></span>
+                      <span>· Giorni rimanenti: <strong className="text-white ml-1">{t.days_left}</strong></span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <Button variant="secondary" size="sm">Difendi</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedTerritory(null)}>Chiudi</Button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          );
+        })()
+      )}
 
       {/* Stats */}
       <section className="px-4 mb-4">

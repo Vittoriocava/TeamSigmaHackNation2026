@@ -22,6 +22,7 @@ interface GameMapProps {
   showFog?: boolean;
   userPosition?: [number, number] | null;
   className?: string;
+  allowClickMovement?: boolean; // <-- NUOVA PROP (Interruttore per la simulazione)
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -35,11 +36,12 @@ const STATUS_COLORS: Record<string, string> = {
 export function GameMap({
   pois,
   center,
-  zoom = 19, // Zoom iniziale ravvicinato (quartiere)
+  zoom = 19,
   onPoiClick,
   showFog = true,
   userPosition,
   className = "",
+  allowClickMovement = true, // Default a false per evitare click accidentali in produzione
 }: GameMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
@@ -50,11 +52,12 @@ export function GameMap({
   const [exploredAreas, setExploredAreas] = useState<[number, number][]>([]);
   const [isReady, setIsReady] = useState(false);
 
+  // Sincronizza il GPS vero se cambia
   useEffect(() => {
     if (userPosition) setCurrentPos(userPosition);
   }, [userPosition]);
 
-  // 1. INIZIALIZZAZIONE MAPPA, PANES E OTTIMIZZAZIONI
+  // 1. INIZIALIZZAZIONE MAPPA E LIVELLI
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
@@ -62,15 +65,13 @@ export function GameMap({
       center,
       zoom,
       minZoom: 13,
-      maxZoom: 19,
+      maxZoom: 22,
       zoomControl: false,
       attributionControl: false,
       doubleClickZoom: false,
-      // FIX VISIVO: Renderizza l'SVG della nebbia molto oltre i bordi per scorrimenti fluidi
       renderer: L.svg({ padding: 5 }), 
     });
 
-    // --- CREAZIONE DEI LIVELLI (Z-INDEX) ---
     map.createPane("fogPane");
     map.getPane("fogPane")!.style.zIndex = "390";
     
@@ -80,16 +81,17 @@ export function GameMap({
     map.createPane("userPane");
     map.getPane("userPane")!.style.zIndex = "420";
 
-    // --- CARICAMENTO MAPPA BASE E OVER-FETCHING ---
+    // CARICAMENTO MAPPA: maxNativeZoom permette di zoomare oltre il limite reale delle immagini (19)
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       maxZoom: 22,
-      keepBuffer: 8, // Carica un'area enorme per scorrimenti fluidi
-      updateWhenIdle: false, // Scarica mentre trascini
+      maxNativeZoom: 19, 
+      keepBuffer: 8, 
+      updateWhenIdle: false, 
     }).addTo(map);
 
     mapInstance.current = map;
 
-    // --- FIX PER IL BUG DELLE MATTONELLE TAGLIATE (Gray Tile Bug) ---
+    // FIX PER IL BUG DELLE MATTONELLE TAGLIATE (Gray Tile Bug)
     setTimeout(() => {
       map.invalidateSize();
     }, 250);
@@ -99,22 +101,36 @@ export function GameMap({
     });
     resizeObserver.observe(mapRef.current);
 
-    // --- SIMULAZIONE GPS CON CLICK DA PC ---
-    map.on("click", (e: L.LeafletMouseEvent) => {
-      setCurrentPos([e.latlng.lat, e.latlng.lng]);
-    });
-
     return () => {
       resizeObserver.disconnect();
       map.remove();
       mapInstance.current = null;
-      // Pulizia profonda per React Strict Mode
       fogLayerRef.current = null; 
       markersRef.current = [];
     };
   }, []);
 
-  // 2. TRACCIAMENTO AREE ESPLORATE (Passi del giocatore)
+  // 1.5 SIMULATORE DI MOVIMENTO (Acceso/Spento tramite allowClickMovement)
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map) return;
+
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      setCurrentPos([e.latlng.lat, e.latlng.lng]);
+    };
+
+    if (allowClickMovement) {
+      map.on("click", handleMapClick);
+    } else {
+      map.off("click", handleMapClick);
+    }
+
+    return () => {
+      map.off("click", handleMapClick);
+    };
+  }, [allowClickMovement, isReady]);
+
+  // 2. TRACCIAMENTO AREE ESPLORATE (Passi)
   useEffect(() => {
     const map = mapInstance.current;
     if (!map || !showFog || !currentPos) return;
@@ -123,17 +139,15 @@ export function GameMap({
       const last = prev[prev.length - 1];
       if (last) {
         const dist = map.distance(last, currentPos);
-        // Salviamo ogni 25 metri per una scia fluida con cerchi da 100m
         if (dist < 25) return prev; 
       }
       return [...prev, currentPos];
     });
     
-    // Centra la mappa sul giocatore quando si muove
     map.panTo(currentPos, { animate: true, duration: 0.5 });
   }, [currentPos, showFog]);
 
-  // 3. DISEGNO DEL FOG OF WAR (Logica Torre di Zelda Integrata)
+  // 3. DISEGNO DEL FOG OF WAR
   useEffect(() => {
     const map = mapInstance.current;
     if (!map || !showFog) {
@@ -141,13 +155,10 @@ export function GameMap({
       return;
     }
 
-    // Le coordinate del "mondo intero"
     let fogPolygon = turf.bboxPolygon([-180, -90, 180, 90]);
-
-    // Raccogliamo tutti i "buchi" da fare nella nebbia
     let allHoles: any[] = [];
 
-    // --- LOGICA A: Cerchi dei passi del giocatore (Raggio piccolo: 100m) ---
+    // LOGICA A: Passi del giocatore (100m)
     if (exploredAreas.length > 0) {
       const walkingCircles = exploredAreas.map((pos) =>
         turf.circle([pos[1], pos[0]], 100, { units: "meters", steps: 32 })
@@ -155,28 +166,37 @@ export function GameMap({
       allHoles = [...allHoles, ...walkingCircles];
     }
 
-    // --- LOGICA B (TORRE DI ZELDA): Cerchi enormi dei POI conquistati (Raggio enorme: 1km) ---
+    // LOGICA B (Torre di Zelda): Territori Conquistati (350m)
     const conqueredPois = pois.filter(p => p.status === "conquered" || p.status === "current");
     if (conqueredPois.length > 0) {
       const poiCircles = conqueredPois.map((poi) =>
-        turf.circle([poi.lng, poi.lat], 350, { units: "meters", steps: 64 }) // 1 km di luce!
+        turf.circle([poi.lng, poi.lat], 350, { units: "meters", steps: 64 }) 
       );
       allHoles = [...allHoles, ...poiCircles];
     }
 
-    // --- FUSIONE E TAGLIO ---
+    // LOGICA C (Fari nella Nebbia): Punti liberi o nemici (30m)
+    const unownedPois = pois.filter(p => p.status === "fog" || p.status === "enemy" || p.status === "decaying");
+    if (unownedPois.length > 0) {
+      const smallPoiCircles = unownedPois.map((poi) =>
+        turf.circle([poi.lng, poi.lat], 30, { units: "meters", steps: 32 }) 
+      );
+      allHoles = [...allHoles, ...smallPoiCircles];
+    }
+
+    // FUSIONE E TAGLIO
     if (allHoles.length > 0) {
-      // Fondiamo insieme tutti i cerchi (piccoli e grandi)
       let mergedExploration = allHoles[0];
       for (let i = 1; i < allHoles.length; i++) {
         mergedExploration = turf.union(turf.featureCollection([mergedExploration, allHoles[i]])) as any;
       }
 
-      // Ritagliamo l'area esplorata fusa dalla nebbia gigante
       try {
-        // FIX: Sintassi corretta per Turf.js v7+
-        const featuresToIntersect = turf.featureCollection([fogPolygon, mergedExploration]);
-        const difference = turf.difference(featuresToIntersect);
+        const featuresToIntersect = turf.featureCollection([
+          fogPolygon as any, 
+          mergedExploration as any
+        ]);
+        const difference = turf.difference(featuresToIntersect as any);
         
         if (difference) {
           fogPolygon = difference as any;
@@ -186,7 +206,7 @@ export function GameMap({
       }
     }
 
-    // FIX FLICKER: Invece di rimuovere e rimettere il livello, aggiorniamo i dati al suo interno
+    // AGGIORNAMENTO LIVELLO (Senza Flicker)
     if (!fogLayerRef.current) {
       fogLayerRef.current = L.geoJSON(fogPolygon, {
         pane: "fogPane",
@@ -201,13 +221,12 @@ export function GameMap({
       fogLayerRef.current.addData(fogPolygon);
     }
 
-    // Nascondiamo il loading screen all'avvio
     if (!isReady) {
       setTimeout(() => setIsReady(true), 150);
     }
-  }, [exploredAreas, showFog, pois]); // Aggiunto 'pois' alle dipendenze per aggiornare la nebbia quando conquisti qualcosa
+  }, [exploredAreas, showFog, pois]);
 
-  // 4. GESTIONE MARKER POI (Sopra la nebbia)
+  // 4. GESTIONE MARKER POI
   useEffect(() => {
     const map = mapInstance.current;
     if (!map) return;
@@ -228,7 +247,6 @@ export function GameMap({
         opacity: 1,
       }).addTo(map);
 
-      // Tooltip dei nomi sempre visibili per guidare il giocatore nel buio
       marker.bindTooltip(poi.name, {
         permanent: true,
         direction: "top",
@@ -241,7 +259,7 @@ export function GameMap({
     });
   }, [pois, showFog, onPoiClick]);
 
-  // 5. MARKER DEL GIOCATORE (Sopra tutto)
+  // 5. MARKER DEL GIOCATORE
   useEffect(() => {
     const map = mapInstance.current;
     if (!map || !currentPos) return;
@@ -271,7 +289,7 @@ export function GameMap({
 
   return (
     <div className={`relative w-full h-full rounded-2xl overflow-hidden ${className}`}>
-      {/* SCHERMATA DI CARICAMENTO (svanisce dolcemente) */}
+      {/* LOADING SCREEN */}
       <div 
         className={`absolute inset-0 z-50 flex items-center justify-center bg-[#111827] text-white transition-opacity duration-500 pointer-events-none ${
           isReady ? "opacity-0" : "opacity-100"
@@ -283,7 +301,7 @@ export function GameMap({
         </div>
       </div>
 
-      {/* CONTENITORE MAPPA (sfondo scuro forzato per mimetizzare i quadrati vuoti) */}
+      {/* MAPPA */}
       <div 
         ref={mapRef} 
         className="w-full h-full bg-[#111827] [&_.leaflet-container]:bg-[#111827]" 
