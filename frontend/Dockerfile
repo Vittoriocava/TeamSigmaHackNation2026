@@ -19,12 +19,12 @@ ENV PORT=3000
 # Prevent Next telemetry in container
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy built assets and minimal files
-COPY --from=build /app/next.config.ts ./next.config.ts
+# Copy built assets and runtime deps
+COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
-COPY --from=build /app/.next/standalone ./
-COPY --from=build /app/.next/static ./.next/static
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/package*.json ./
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["npm", "run", "start"]
