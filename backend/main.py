@@ -1,9 +1,12 @@
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from jose import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -183,3 +186,35 @@ async def health():
 async def startup():
     init_db()
     logger.info("🏙️ Play The City API running — HackNation 2026 (SQLite)")
+
+
+# ── Serve Frontend ────────────────────────────────────────────────────────────
+
+# Get the absolute path to frontend build directory
+frontend_dir = Path(__file__).parent.parent / "frontend"
+frontend_build_dir = frontend_dir / ".next"
+frontend_public_dir = frontend_dir / "public"
+
+# Mount static files (_next, public)
+if frontend_build_dir.exists():
+    app.mount("/_next", StaticFiles(directory=str(frontend_build_dir / "static")), name="frontend_next")
+
+if frontend_public_dir.exists():
+    app.mount("/public", StaticFiles(directory=str(frontend_public_dir)), name="frontend_public")
+
+
+# Fallback: serve index.html for all non-API routes (SPA routing)
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    """Serve Next.js frontend for non-API routes."""
+    # Skip API routes (handled by routers)
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Return index.html for client-side routing
+    index_file = frontend_dir / "out" / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+
+    # Fallback to 404
+    raise HTTPException(status_code=404, detail="Frontend not found")

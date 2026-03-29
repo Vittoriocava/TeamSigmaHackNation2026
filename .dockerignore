@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+.next
+.vercel
+out
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.env
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*.iml
+
+# OS
+.DS_Store
+.env.local
+.env.*.local
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Project
+.git
+.gitignore
+README.md
+.editorconfig
+.claude-workspace
+.claude
