@@ -88,7 +88,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4" suppressHydrationWarning>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -103,7 +103,7 @@ export default function AuthPage() {
           </p>
         </div>
 
-        <div className="glass rounded-2xl p-6">
+        <div className="glass rounded-2xl p-6" suppressHydrationWarning>
           <div className="flex gap-1 mb-6 glass rounded-xl p-1">
             <button
               onClick={() => setMode("register")}
