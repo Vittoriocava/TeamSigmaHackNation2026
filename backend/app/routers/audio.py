@@ -14,15 +14,15 @@ def _narration_prompt(req: NarrationRequest) -> str:
     lang = langs.get(req.user_profile.language, "italiano")
 
     mode_instructions = {
-        "on_demand": "Narrazione completa, 2-3 minuti. Includi storia, curiosità, connessione emotiva.",
-        "proximity": "Narrazione media, 60-90 secondi. Focus sul perché è speciale questo momento.",
-        "radar": "Narrazione breve, 30-45 secondi. Aggancio curioso immediato per fermare l'utente.",
+        "on_demand": "Narrazione completa, 2-3 minuti. Usa i dati forniti ma ESPANDILI con FUN FACTS, aneddoti curiosi, segreti, misteri e cose che pochissime persone sanno di questo luogo. Non fare una noiosa lezione di storia.",
+        "proximity": "Narrazione media, 60-90 secondi. Svela subito un segreto o un fun fact sorprendente per catturare l'attenzione, poi dai qualche dettaglio chiave.",
+        "radar": "Narrazione breve, 30-45 secondi. Un solo fatto scioccante o curiosità imperdibile per fermare l'utente incuriosendolo.",
     }
 
-    return f"""Sei la guida vocale di Play The City a {req.city}.
+    return f"""Sei l'esclusiva e brillante guida vocale di Play The City a {req.city}.
 Luogo: {req.poi_name}
-Dati: {req.wikipedia_excerpt}
-Fatti: {req.wikidata_facts}
+Dati base: {req.wikipedia_excerpt}
+Fatti noti: {req.wikidata_facts}
 Profilo: interessi {req.user_profile.interests}, livello {req.user_profile.cultural_level}
 Lingua: {lang}
 Modalità: {req.mode}

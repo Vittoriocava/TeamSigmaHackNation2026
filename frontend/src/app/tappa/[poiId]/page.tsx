@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, Volume2, Camera, Clock, MapPin,
-  Shield, Star, Share2, Puzzle, Loader, HelpCircle, Loader2,
+  Shield, Star, Share2, Puzzle, Loader, HelpCircle, Loader2, Pause
 } from "lucide-react";
 import { Button } from "@/components/UI/Button";
 import { Card } from "@/components/UI/Card";
@@ -38,7 +38,7 @@ export default function TappaPage() {
 
   const [activeTab, setActiveTab] = useState<"info" | "timeline" | "ar" | "pieces">("info");
   const [selectedEra, setSelectedEra] = useState(0);
-  const [narrating, setNarrating] = useState(false);
+  const [narratingStatus, setNarratingStatus] = useState<"idle" | "loading" | "playing">("idle");
   const [owner, setOwner] = useState<TerritoryOwner | null>(null);
   const [territoryStatus, setTerritoryStatus] = useState<"free" | "mine" | "other">("free");
   const [piecesCollected, setPiecesCollected] = useState(0);
@@ -326,14 +326,16 @@ export default function TappaPage() {
                 {/* Audio narration */}
                 {(() => {
                   const handleNarrate = async () => {
-                    if (narrating) {
+                    if (narratingStatus === "playing") {
                       // Stop playback
                       const audio = document.getElementById("narration-audio") as HTMLAudioElement;
                       if (audio) { audio.pause(); audio.currentTime = 0; }
-                      setNarrating(false);
+                      setNarratingStatus("idle");
                       return;
                     }
-                    setNarrating(true);
+                    if (narratingStatus === "loading") return;
+
+                    setNarratingStatus("loading");
                     try {
                       const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
                       const res = await fetch(`${API}/api/audio/narrate`, {
@@ -349,7 +351,7 @@ export default function TappaPage() {
                           mode: "on_demand",
                           wikipedia_excerpt: poi.description || "",
                           wikidata_facts: "",
-                          user_profile: { language: "it", cultural_level: "casual" },
+                          user_profile: { language: "it", cultural_level: "casual", interests: ["storia", "curiosità"] },
                         }),
                       });
                       const data = await res.json();
@@ -362,43 +364,49 @@ export default function TappaPage() {
                           document.body.appendChild(audio);
                         }
                         audio.src = audioSrc;
-                        audio.onended = () => setNarrating(false);
-                        audio.play();
+                        audio.onended = () => setNarratingStatus("idle");
+                        audio.onpause = () => setNarratingStatus("idle");
+                        audio.onplay = () => setNarratingStatus("playing");
+                        await audio.play();
                       } else {
-                        setNarrating(false);
+                        setNarratingStatus("idle");
                       }
                     } catch {
-                      setNarrating(false);
+                      setNarratingStatus("idle");
                     }
                   };
                   return (
                     <Card
                       onClick={handleNarrate}
-                      className="flex items-center gap-3 mb-3 cursor-pointer"
+                      className="flex items-center gap-3 mb-3 cursor-pointer hover:bg-white/10 transition-colors"
                     >
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          narrating ? "bg-primary animate-pulse" : "bg-primary/20"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          narratingStatus === "loading" ? "bg-primary animate-pulse" : narratingStatus === "playing" ? "bg-primary/40 pulse-ring" : "bg-primary/20"
                         }`}
                       >
-                        <Volume2 size={18} className="text-primary-light" />
+                        {narratingStatus === "loading" ? <Loader2 size={18} className="animate-spin text-primary-light" /> :
+                         narratingStatus === "playing" ? <Pause size={18} className="text-primary-light" /> :
+                         <Volume2 size={18} className="text-primary-light" />}
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium">
-                          {narrating ? "In riproduzione... (tocca per fermare)" : "Raccontami questo posto"}
+                          {narratingStatus === "loading" ? "Generazione AI in corso..." :
+                           narratingStatus === "playing" ? "In riproduzione (tocca per fermare)" :
+                           "Raccontami questo posto"}
                         </p>
                         <p className="text-[10px] text-white/50">
-                          Narrazione AI · ElevenLabs
+                          Narrazione AI con Fun Facts · ElevenLabs
                         </p>
                       </div>
-                      {narrating && (
-                        <div className="flex gap-0.5 items-end h-6">
+                      {narratingStatus === "playing" && (
+                        <div className="flex gap-0.5 items-end h-6 flex-shrink-0">
                           {[...Array(5)].map((_, i) => (
                             <motion.div
                               key={i}
                               animate={{ height: [4, 16, 4] }}
                               transition={{ duration: 0.6, delay: i * 0.1, repeat: Infinity }}
-                              className="w-1 bg-primary rounded-full"
+                              className="w-1 bg-primary-light rounded-t-sm"
                             />
                           ))}
                         </div>
