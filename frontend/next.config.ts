@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const API_PROXY_TARGET = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+  
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "oaidalleapiprodscus.blob.core.windows.net" },

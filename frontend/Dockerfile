@@ -1,32 +1,32 @@
 # Multi-stage build for Next.js frontend
 FROM node:20-slim AS deps
 WORKDIR /app
-# When building from repo root, these live under frontend/
-COPY frontend/package.json frontend/package-lock.json* frontend/.npmrc* ./
-RUN npm install --production=false
+COPY frontend/package.json frontend/package-lock.json* ./
+# npm ci è più sicuro per le build riproducibili
+RUN npm ci
 
 FROM node:20-slim AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY frontend/. .
+COPY frontend/ .
 RUN npm run build
 
 FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# Set Next.js port (Railway/GCP typically inject PORT)
+# Railway inietta dinamicamente la variabile PORT, Next la rileva in automatico
 ENV PORT=8080
-ENV HOST=0.0.0.0
-# Prevent Next telemetry in container
+# HOSTNAME è fondamentale per far esporre il server all'esterno del container
+ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy built assets and runtime deps
-COPY --from=build /app/.next ./.next
+# Copia solo gli asset necessari per la modalità standalone
 COPY --from=build /app/public ./public
-COPY --from=deps /app/node_modules ./node_modules
-COPY frontend/package*.json ./
+# I file standalone vengono generati automaticamente grazie alla modifica al next.config.js
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
 
 EXPOSE 8080
 
-# Explicitly pass hostname/port to Next to avoid binding issues on platforms with custom PORT
-CMD ["sh", "-c", "PORT=${PORT:-8080} npm run start -- --hostname 0.0.0.0 --port ${PORT:-8080}"]
+# In standalone, avviamo direttamente il server Node.js ottimizzato, senza usare npm!
+CMD ["node", "server.js"]
