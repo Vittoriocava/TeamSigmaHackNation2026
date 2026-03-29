@@ -28,4 +28,5 @@ COPY frontend/package*.json ./
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "HOST=${HOST:-0.0.0.0} PORT=${PORT:-8080} npm run start"]
+# Explicitly pass hostname/port to Next to avoid binding issues on platforms with custom PORT
+CMD ["sh", "-c", "PORT=${PORT:-8080} npm run start -- --hostname 0.0.0.0 --port ${PORT:-8080}"]
