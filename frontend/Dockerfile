@@ -1,13 +1,14 @@
 # Multi-stage build for Next.js frontend
 FROM node:20-slim AS deps
 WORKDIR /app
-COPY package.json package-lock.json* .npmrc* ./
+# When building from repo root, these live under frontend/
+COPY frontend/package.json frontend/package-lock.json* frontend/.npmrc* ./
 RUN npm install --production=false
 
 FROM node:20-slim AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY frontend/. .
 RUN npm run build
 
 FROM node:20-slim AS runner
