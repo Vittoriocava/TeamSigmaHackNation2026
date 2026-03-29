@@ -33,12 +33,21 @@ interface Props {
   poiDescription?: string;
   city: string;
   token: string | null;
-  onClose: (newPiecesTotal?: number) => void;
+  isSteal?: boolean;
+  onClose: (result?: SubmitResponse) => void;
 }
 
 type Phase = "loading" | "playing" | "result" | "error";
 
-export function PoiQuizModal({ poiId, poiName, poiDescription, city, token, onClose }: Props) {
+export function PoiQuizModal({
+  poiId,
+  poiName,
+  poiDescription,
+  city,
+  token,
+  isSteal,
+  onClose,
+}: Props) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [piecesOwned, setPiecesOwned] = useState(0);
@@ -117,7 +126,7 @@ export function PoiQuizModal({ poiId, poiName, poiDescription, city, token, onCl
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(result?.pieces_total); }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(result ?? undefined); }}
     >
       <motion.div
         initial={{ y: "100%" }}
@@ -131,11 +140,13 @@ export function PoiQuizModal({ poiId, poiName, poiDescription, city, token, onCl
           <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] text-white/40 uppercase tracking-wider">Quiz</p>
+              <p className="text-[11px] text-white/40 uppercase tracking-wider">
+                {isSteal ? "Sfida di conquista" : "Quiz"}
+              </p>
               <h2 className="font-display font-bold text-base truncate max-w-[260px]">{poiName}</h2>
             </div>
             <button
-              onClick={() => onClose(result?.pieces_total)}
+              onClick={() => onClose(result ?? undefined)}
               className="glass rounded-full p-2"
             >
               <X size={16} />
@@ -338,7 +349,7 @@ export function PoiQuizModal({ poiId, poiName, poiDescription, city, token, onCl
                       Rifai il quiz 🔄
                     </button>
                     <button
-                      onClick={() => onClose(result.pieces_total)}
+                      onClick={() => onClose(result)}
                       className="glass py-3.5 px-5 rounded-2xl text-sm font-medium"
                     >
                       Chiudi
@@ -346,10 +357,10 @@ export function PoiQuizModal({ poiId, poiName, poiDescription, city, token, onCl
                   </>
                 ) : (
                   <button
-                    onClick={() => onClose(result.pieces_total)}
+                    onClick={() => onClose(result)}
                     className="w-full bg-primary text-white py-3.5 rounded-2xl text-sm font-bold"
                   >
-                    3/3 Pezzi collezionati! 🎉
+                    {isSteal && result.correct === result.total ? "Conquista completata! 🎉" : "3/3 Pezzi collezionati! 🎉"}
                   </button>
                 )}
               </div>

@@ -421,9 +421,9 @@ function FutureTripView({
           poiDescription={quizPoi.description}
           city={city}
           token={token}
-          onClose={(newTotal) => {
-            if (newTotal !== undefined) {
-              setPiecesMap((prev) => ({ ...prev, [quizPoi.id]: newTotal }));
+          onClose={(result) => {
+            if (result?.pieces_total !== undefined) {
+              setPiecesMap((prev) => ({ ...prev, [quizPoi.id]: result.pieces_total }));
             }
             setQuizPoi(null);
           }}
@@ -522,7 +522,7 @@ function FutureTripView({
                 const isFocused = focusedPoi === stop.poi_id;
                 const isLast = idx === currentDay.stops.length - 1;
                 return (
-                  <div key={stop.poi_id} id={`stop-${stop.poi_id}`} className="flex gap-3">
+                  <div key={`${idx}-${stop.poi_id}`} id={`stop-${stop.poi_id}`} className="flex gap-3">
                     <div className="flex flex-col items-center">
                       <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                         isFocused ? "border-primary bg-primary text-white" : "border-white/20 bg-white/5 text-white/50"

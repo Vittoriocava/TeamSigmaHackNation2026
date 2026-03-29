@@ -51,6 +51,16 @@ async def get_trip_pois(req: TripPOIsRequest):
     if not pois:
         raise HTTPException(status_code=500, detail="Impossibile generare POI per questa città")
 
+    # Dedup: ensure no POI name appears twice in the same trip plan
+    seen_names: set[str] = set()
+    deduped: list[dict] = []
+    for p in pois:
+        name_lower = p.get("name", "").lower()
+        if name_lower not in seen_names:
+            seen_names.add(name_lower)
+            deduped.append(p)
+    pois = deduped
+
     return {"pois": pois, "city": req.city, "total": len(pois)}
 
 

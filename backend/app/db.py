@@ -192,6 +192,7 @@ def init_db():
         # Migrations for existing databases
         for migration in [
             "ALTER TABLE itineraries ADD COLUMN start_date TEXT",
+            "ALTER TABLE territories ADD COLUMN custom_phrase TEXT DEFAULT ''",
         ]:
             try:
                 conn.execute(migration)

@@ -181,7 +181,15 @@ async def play_poi_quiz(
     req: PlayQuizRequest,
     user_id: str = Depends(get_current_user),
 ):
-    """Generate 5 questions for a POI solo quiz (for piece collection)."""
+    """Generate 5 questions for a POI solo quiz (for piece collection).
+    
+    Difficulty scales with territory tier:
+    - Tier 4 (fresh conquest): all hard
+    - Tier 3: medium + hard  
+    - Tier 2: easy + medium
+    - Tier 1 (decayed): all easy
+    - No territory: standard mix
+    """
     poi = POI(
         id=poi_id,
         name=req.poi_name,
@@ -197,13 +205,46 @@ async def play_poi_quiz(
             "SELECT pieces_collected FROM user_pieces WHERE user_id = ? AND poi_id = ?",
             (user_id, poi_id),
         ).fetchone()
+
+        # Get territory tier for difficulty scaling
+        territory = conn.execute(
+            "SELECT tier FROM territories WHERE poi_id = ? AND active = 1",
+            (poi_id,),
+        ).fetchone()
+
+        # Get previously used question hashes for this user+POI
+        used_rows = conn.execute(
+            "SELECT question_hash FROM quiz_results WHERE user_id = ? AND poi_id = ?",
+            (user_id, poi_id),
+        ).fetchall()
+    
     pieces_owned = row["pieces_collected"] if row else 0
+    used_hashes = {r["question_hash"] for r in used_rows}
+    
+    # Determine difficulty based on territory tier
+    tier = territory["tier"] if territory else 0
+    if tier >= 4:
+        difficulties = ["hard", "hard", "hard", "hard", "hard"]
+    elif tier == 3:
+        difficulties = ["medium", "medium", "hard", "hard", "hard"]
+    elif tier == 2:
+        difficulties = ["easy", "medium", "medium", "hard", "medium"]
+    elif tier == 1:
+        difficulties = ["easy", "easy", "easy", "medium", "easy"]
+    else:
+        difficulties = ["easy", "easy", "medium", "medium", "hard"]
 
     # Generate 5 questions sequentially to avoid duplicates
-    difficulties = ["easy", "easy", "medium", "medium", "hard"]
     questions = []
     for diff in difficulties:
         q = await generate_quiz(poi, profile, diff, [qq.question for qq in questions])
+        # Check if this question was already used
+        qhash = question_hash(q)
+        retry = 0
+        while qhash in used_hashes and retry < 2:
+            q = await generate_quiz(poi, profile, diff, [qq.question for qq in questions] + [q.question])
+            qhash = question_hash(q)
+            retry += 1
         questions.append(q)
 
     return {
@@ -211,6 +252,7 @@ async def play_poi_quiz(
         "poi_name": req.poi_name,
         "questions": [q.model_dump() for q in questions],
         "pieces_owned": pieces_owned,
+        "territory_tier": tier,
     }
 
 

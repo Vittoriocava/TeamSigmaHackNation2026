@@ -25,6 +25,8 @@ interface TerritoryOwner {
   name: string;
   tier: number;
   weeks: number;
+  userId: string;
+  phrase: string;
 }
 
 export default function TappaPage() {
@@ -32,15 +34,22 @@ export default function TappaPage() {
   const router = useRouter();
   const poiId = params.poiId as string;
 
-  const { trip, currentGame, savedItineraries, token, user } = useStore();
+  const { trip, currentGame, savedItineraries, token, user, userPosition } = useStore();
 
   const [activeTab, setActiveTab] = useState<"info" | "timeline" | "ar" | "pieces">("info");
   const [selectedEra, setSelectedEra] = useState(0);
   const [narrating, setNarrating] = useState(false);
   const [owner, setOwner] = useState<TerritoryOwner | null>(null);
+  const [territoryStatus, setTerritoryStatus] = useState<"free" | "mine" | "other">("free");
   const [piecesCollected, setPiecesCollected] = useState(0);
   const [piecesLoading, setPiecesLoading] = useState(true);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [conquering, setConquering] = useState(false);
+  const [userPos, setUserPos] = useState<{lat: number, lng: number} | null>(null);
+  const [greeting, setGreeting] = useState(false);
+  const [greeted, setGreeted] = useState(false);
+  const [phraseInput, setPhraseInput] = useState("");
+  const [showPhraseModal, setShowPhraseModal] = useState(false);
 
   // Look up POI from store: trip.rankedPois → currentGame.stops → savedItineraries
   const poi = (() => {
@@ -98,14 +107,19 @@ export default function TappaPage() {
             name: o.users?.display_name || o.user_id || "Anonimo",
             tier: o.tier || 1,
             weeks: o.weeks_held || 0,
+            userId: o.user_id || "",
+            phrase: data.custom_phrase || o.custom_phrase || "",
           });
+          setTerritoryStatus(o.user_id === user?.id ? "mine" : "other");
+        } else {
+          setTerritoryStatus("free");
         }
       } catch {
         // Territory info is optional, ignore errors
       }
     };
     fetchOwner();
-  }, [poiId, token]);
+  }, [poiId, token, user?.id]);
 
   // Fetch user's pieces for this POI
   useEffect(() => {
@@ -149,11 +163,45 @@ export default function TappaPage() {
             poiDescription={poi.description || poi.why_for_you}
             city={poi.city}
             token={token}
-            onClose={(newTotal) => {
-              if (newTotal !== undefined) {
-                setPiecesCollected(newTotal);
+            isSteal={territoryStatus === "other"}
+            onClose={async (result) => {
+              if (result?.pieces_total !== undefined) {
+                setPiecesCollected(result.pieces_total);
               }
               setShowQuiz(false);
+
+              // Auto-conquer if it was a successful steal (100% score)
+              if (result && territoryStatus === "other" && result.correct === result.total && userPos && token) {
+                try {
+                  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                  const res = await fetch(`${API}/api/territory/conquer`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      poi_id: poiId,
+                      city_slug: (poi?.city || "").toLowerCase().replace(/ /g, "-").replace(/'/g, ""),
+                      lat: userPos.lat,
+                      lng: userPos.lng,
+                    }),
+                  });
+                  if (res.ok) {
+                    setTerritoryStatus("mine");
+                    setOwner({
+                      name: user?.displayName || "Tu",
+                      tier: 1,
+                      weeks: 0,
+                      userId: user?.id || "",
+                      phrase: "",
+                    });
+                    setTimeout(() => setShowPhraseModal(true), 600); // let modal close
+                  }
+                } catch (e) {
+                  console.error("Error during steal conquer:", e);
+                }
+              }
             }}
           />
         )}
@@ -186,20 +234,46 @@ export default function TappaPage() {
         {/* Owner badge */}
         {owner && (
           <div className="px-4 -mt-2 mb-4">
-            <div className="glass rounded-xl p-3 flex items-center gap-3">
-              <Shield size={18} className="text-blue-400" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">
-                  Territorio di{" "}
-                  <span className="text-blue-400">{owner.name}</span>
-                </p>
-                <p className="text-[10px] text-white/50">
-                  Tier {owner.tier} · {owner.weeks} settimane
-                </p>
+            <div className="glass rounded-xl p-3">
+              <div className="flex items-center gap-3 mb-2">
+                <Shield size={18} className="text-blue-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">
+                    Territorio di{" "}
+                    <span className="text-blue-400">{owner.name}</span>
+                  </p>
+                  <p className="text-[10px] text-white/50">
+                    Tier {owner.tier} · {owner.weeks} settimane
+                  </p>
+                </div>
+                {territoryStatus === "other" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      if (greeting || greeted || !token) return;
+                      setGreeting(true);
+                      try {
+                        const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                        await fetch(`${API}/api/territory/greet?poi_id=${poiId}`, {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        setGreeted(true);
+                      } catch {} finally { setGreeting(false); }
+                    }}
+                    disabled={greeted}
+                  >
+                    {greeted ? "✅ Salutato!" : greeting ? "..." : "👋 Saluta"}
+                  </Button>
+                )}
               </div>
-              <Button variant="ghost" size="sm">
-                👋 Saluta
-              </Button>
+              {/* Owner's custom phrase */}
+              {owner.phrase && (
+                <div className="bg-white/5 rounded-lg px-3 py-2 mt-1">
+                  <p className="text-xs text-white/70 italic">&ldquo;{owner.phrase}&rdquo;</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -210,7 +284,7 @@ export default function TappaPage() {
             {[
               { key: "info", label: "Info" },
               { key: "timeline", label: "Timeline" },
-              { key: "ar", label: "AR" },
+              { key: "ar", label: "Nel Tempo" },
               { key: "pieces", label: "Pezzi" },
             ].map((tab) => (
               <button
@@ -243,38 +317,88 @@ export default function TappaPage() {
                 </p>
 
                 {/* Audio narration */}
-                <Card
-                  onClick={() => setNarrating(!narrating)}
-                  className="flex items-center gap-3 mb-3"
-                >
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      narrating ? "bg-primary animate-pulse" : "bg-primary/20"
-                    }`}
-                  >
-                    <Volume2 size={18} className="text-primary-light" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      {narrating ? "In riproduzione..." : "Raccontami questo posto"}
-                    </p>
-                    <p className="text-[10px] text-white/50">
-                      Narrazione AI · ~2 minuti
-                    </p>
-                  </div>
-                  {narrating && (
-                    <div className="flex gap-0.5 items-end h-6">
-                      {[...Array(5)].map((_, i) => (
-                        <motion.div
-                          key={i}
-                          animate={{ height: [4, 16, 4] }}
-                          transition={{ duration: 0.6, delay: i * 0.1, repeat: Infinity }}
-                          className="w-1 bg-primary rounded-full"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </Card>
+                {(() => {
+                  const handleNarrate = async () => {
+                    if (narrating) {
+                      // Stop playback
+                      const audio = document.getElementById("narration-audio") as HTMLAudioElement;
+                      if (audio) { audio.pause(); audio.currentTime = 0; }
+                      setNarrating(false);
+                      return;
+                    }
+                    setNarrating(true);
+                    try {
+                      const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                      const res = await fetch(`${API}/api/audio/narrate`, {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        },
+                        body: JSON.stringify({
+                          poi_id: poiId,
+                          poi_name: poi.name,
+                          city: poi.city,
+                          mode: "on_demand",
+                          wikipedia_excerpt: poi.description || "",
+                          wikidata_facts: "",
+                          user_profile: { language: "it", cultural_level: "casual" },
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.audio_base64) {
+                        const audioSrc = `data:audio/mpeg;base64,${data.audio_base64}`;
+                        let audio = document.getElementById("narration-audio") as HTMLAudioElement;
+                        if (!audio) {
+                          audio = document.createElement("audio");
+                          audio.id = "narration-audio";
+                          document.body.appendChild(audio);
+                        }
+                        audio.src = audioSrc;
+                        audio.onended = () => setNarrating(false);
+                        audio.play();
+                      } else {
+                        setNarrating(false);
+                      }
+                    } catch {
+                      setNarrating(false);
+                    }
+                  };
+                  return (
+                    <Card
+                      onClick={handleNarrate}
+                      className="flex items-center gap-3 mb-3 cursor-pointer"
+                    >
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          narrating ? "bg-primary animate-pulse" : "bg-primary/20"
+                        }`}
+                      >
+                        <Volume2 size={18} className="text-primary-light" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">
+                          {narrating ? "In riproduzione... (tocca per fermare)" : "Raccontami questo posto"}
+                        </p>
+                        <p className="text-[10px] text-white/50">
+                          Narrazione AI · ElevenLabs
+                        </p>
+                      </div>
+                      {narrating && (
+                        <div className="flex gap-0.5 items-end h-6">
+                          {[...Array(5)].map((_, i) => (
+                            <motion.div
+                              key={i}
+                              animate={{ height: [4, 16, 4] }}
+                              transition={{ duration: 0.6, delay: i * 0.1, repeat: Infinity }}
+                              className="w-1 bg-primary rounded-full"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })()}
 
                 {/* Quick info */}
                 <div className="grid grid-cols-3 gap-2">
@@ -458,14 +582,173 @@ export default function TappaPage() {
                         <HelpCircle size={16} className="mr-2" />
                         Quiz su {poi.name} → Guadagna 1 pezzo
                       </Button>
-                    ) : (
-                      <div className="glass-dark rounded-xl p-4 text-center border border-green-500/30">
-                        <p className="text-green-400 font-semibold">
-                          Pre-reclamo attivo! 🎉
+                    ) : territoryStatus === "free" ? (
+                      <div className="space-y-3">
+                        <div className="glass-dark rounded-xl p-4 text-center border border-green-500/30">
+                          <p className="text-green-400 font-semibold">
+                            3/3 pezzi raccolti! 🎉
+                          </p>
+                          <p className="text-xs text-white/50 mt-1">
+                            Vai fisicamente al luogo per conquistarlo!
+                          </p>
+                        </div>
+                        <Button
+                          className="w-full"
+                          onClick={async () => {
+                            if (!token || conquering) return;
+                            setConquering(true);
+                            try {
+                              let userLat: number, userLng: number;
+
+                              if (userPosition) {
+                                // DEMO BYPASS: Use map's click-to-move simulated position
+                                userLat = userPosition.lat;
+                                userLng = userPosition.lng;
+                              } else {
+                                // REAL GPS
+                                const position = await new Promise<GeolocationPosition>((resolve, reject) =>
+                                  navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                    enableHighAccuracy: true, timeout: 10000,
+                                  })
+                                );
+                                userLat = position.coords.latitude;
+                                userLng = position.coords.longitude;
+                              }
+
+                              const poiLat = poi.lat || 0;
+                              const poiLng = poi.lng || 0;
+
+                              // Haversine distance check (100m threshold)
+                              const R = 6371000;
+                              const dLat = (poiLat - userLat) * Math.PI / 180;
+                              const dLng = (poiLng - userLng) * Math.PI / 180;
+                              const a = Math.sin(dLat/2)**2 + Math.cos(userLat * Math.PI/180) * Math.cos(poiLat * Math.PI/180) * Math.sin(dLng/2)**2;
+                              const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+                              if (dist > 100) {
+                                alert(`Sei troppo lontano! (${Math.round(dist)}m) Avvicinati a meno di 100m dal luogo.`);
+                                return;
+                              }
+
+                              const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                              const res = await fetch(`${API}/api/territory/conquer`, {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({
+                                  poi_id: poiId,
+                                  city_slug: (poi.city || "").toLowerCase().replace(/ /g, "-").replace(/'/g, ""),
+                                  lat: userLat,
+                                  lng: userLng,
+                                }),
+                              });
+                              if (res.ok) {
+                                setTerritoryStatus("mine");
+                                setOwner({
+                                  name: user?.displayName || "Tu",
+                                  tier: 1,
+                                  weeks: 0,
+                                  userId: user?.id || "",
+                                  phrase: "",
+                                });
+                                setShowPhraseModal(true);
+                              }
+                            } catch (err: any) {
+                              if (err?.code === 1) {
+                                alert("Permesso GPS negato. Abilita la geolocalizzazione per conquistare territori.");
+                              }
+                            } finally { setConquering(false); }
+                          }}
+                          disabled={conquering}
+                        >
+                          <MapPin size={16} className="mr-2" />
+                          {conquering ? "Verifica GPS..." : "📍 Conquista (richiede GPS)"}
+                        </Button>
+                      </div>
+                    ) : territoryStatus === "mine" ? (
+                      <div className="glass-dark rounded-xl p-4 text-center border border-primary/30">
+                        <p className="text-primary-light font-semibold">
+                          È il tuo territorio! 👑
                         </p>
                         <p className="text-xs text-white/50 mt-1">
-                          Vai fisicamente a {poi.name} per conquistare il territorio
+                          {owner?.phrase ? `"${owner.phrase}"` : "Aggiungi una frase personalizzata"}
                         </p>
+                        <p className="text-[10px] text-white/30 mt-1">
+                          Possesso valido 1 mese · Difesa settimanale per mantenere il livello
+                        </p>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="mt-3"
+                          onClick={() => setShowPhraseModal(true)}
+                        >
+                          {owner?.phrase ? "✏️ Modifica frase" : "✍️ Aggiungi frase"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="glass-dark rounded-xl p-4 text-center border border-red-500/20">
+                          <p className="text-red-400 font-semibold">
+                            Territorio di {owner?.name} · Tier {owner?.tier}
+                          </p>
+                          <p className="text-xs text-white/50 mt-1">
+                            Completa il quiz al livello attuale per rubarglielo!
+                          </p>
+                        </div>
+                        <Button
+                          className="w-full"
+                          variant="secondary"
+                          onClick={async () => {
+                            try {
+                              setConquering(true); // use to show 'Verifica GPS'
+                              let userLat: number, userLng: number;
+
+                              if (userPosition) {
+                                // DEMO BYPASS: Use map's click-to-move simulated position
+                                userLat = userPosition.lat;
+                                userLng = userPosition.lng;
+                              } else {
+                                // REAL GPS
+                                const position = await new Promise<GeolocationPosition>((resolve, reject) =>
+                                  navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                    enableHighAccuracy: true, timeout: 10000,
+                                  })
+                                );
+                                userLat = position.coords.latitude;
+                                userLng = position.coords.longitude;
+                              }
+
+                              const poiLat = poi.lat || 0;
+                              const poiLng = poi.lng || 0;
+
+                              const R = 6371000;
+                              const dLat = (poiLat - userLat) * Math.PI / 180;
+                              const dLng = (poiLng - userLng) * Math.PI / 180;
+                              const a = Math.sin(dLat/2)**2 + Math.cos(userLat * Math.PI/180) * Math.cos(poiLat * Math.PI/180) * Math.sin(dLng/2)**2;
+                              const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+                              if (dist > 100) {
+                                alert(`Sei troppo lontano! (${Math.round(dist)}m) Avvicinati a meno di 100m dal luogo.`);
+                                setConquering(false);
+                                return;
+                              }
+                              setUserPos({ lat: userLat, lng: userLng });
+                              setShowQuiz(true);
+                            } catch (err: any) {
+                              if (err?.code === 1) {
+                                alert("Permesso GPS negato. Abilita la geolocalizzazione per rubare territori.");
+                              }
+                            } finally {
+                              setConquering(false);
+                            }
+                          }}
+                          disabled={conquering}
+                        >
+                          <Shield size={16} className="mr-2" />
+                          {conquering ? "Verifica GPS..." : `⚔️ Ruba (Lvl ${owner?.tier || 1})`}
+                        </Button>
                       </div>
                     )}
                   </>
@@ -475,6 +758,69 @@ export default function TappaPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Phrase modal */}
+      <AnimatePresence>
+        {showPhraseModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowPhraseModal(false); }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#0f0f1a] rounded-2xl p-6 w-full max-w-md"
+            >
+              <h3 className="font-display text-lg font-bold mb-2">La tua frase</h3>
+              <p className="text-xs text-white/50 mb-4">
+                Lascia un messaggio per chi visita questo luogo
+              </p>
+              <textarea
+                value={phraseInput}
+                onChange={(e) => setPhraseInput(e.target.value)}
+                maxLength={200}
+                placeholder="Es: Questo posto ha cambiato la mia vita..."
+                className="w-full glass rounded-xl p-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none h-24 mb-2"
+              />
+              <p className="text-[10px] text-white/30 mb-4 text-right">{phraseInput.length}/200</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setShowPhraseModal(false)}
+                >
+                  Annulla
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={async () => {
+                    if (!token || !phraseInput.trim()) return;
+                    try {
+                      const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+                      await fetch(`${API}/api/territory/set-phrase`, {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ poi_id: poiId, phrase: phraseInput }),
+                      });
+                      if (owner) setOwner({ ...owner, phrase: phraseInput });
+                      setShowPhraseModal(false);
+                    } catch {}
+                  }}
+                >
+                  ✅ Salva
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
