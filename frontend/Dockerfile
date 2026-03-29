@@ -16,6 +16,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Set Next.js port
 ENV PORT=3000
+ENV HOST=0.0.0.0
 # Prevent Next telemetry in container
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -27,4 +28,4 @@ COPY frontend/package*.json ./
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "HOST=${HOST:-0.0.0.0} PORT=${PORT:-3000} npm run start"]
