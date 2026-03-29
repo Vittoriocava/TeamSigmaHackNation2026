@@ -1,11 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft, Volume2, Camera, Clock, MapPin,
-  Shield, Star, Share2, Puzzle, Loader, HelpCircle, Loader2,
+  Shield, Star, Share2, Puzzle, Loader, HelpCircle, Loader2, Pause
 } from "lucide-react";
 import { Button } from "@/components/UI/Button";
 import { Card } from "@/components/UI/Card";
@@ -29,16 +30,17 @@ interface TerritoryOwner {
   phrase: string;
 }
 
-export default function TappaPage() {
+function TappaContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const poiId = params.poiId as string;
 
   const { trip, currentGame, savedItineraries, token, user, userPosition } = useStore();
 
   const [activeTab, setActiveTab] = useState<"info" | "timeline" | "ar" | "pieces">("info");
   const [selectedEra, setSelectedEra] = useState(0);
-  const [narrating, setNarrating] = useState(false);
+  const [narratingStatus, setNarratingStatus] = useState<"idle" | "loading" | "playing">("idle");
   const [owner, setOwner] = useState<TerritoryOwner | null>(null);
   const [territoryStatus, setTerritoryStatus] = useState<"free" | "mine" | "other">("free");
   const [piecesCollected, setPiecesCollected] = useState(0);
@@ -57,6 +59,11 @@ export default function TappaPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [arEra, setArEra] = useState("1200");
+  const [timelineImages, setTimelineImages] = useState<Record<string, string>>({});
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineTriggered, setTimelineTriggered] = useState(false);
+  const [enriched, setEnriched] = useState<{ image_url: string; story: string; curiosity: string } | null>(null);
+  const [enrichLoading, setEnrichLoading] = useState(false);
 
   // Look up POI from store: trip.rankedPois → currentGame.stops → savedItineraries
   const poi = (() => {
@@ -93,6 +100,27 @@ export default function TappaPage() {
           };
         }
       }
+    }
+
+    // 4. Fallback: reconstruct from query params (?name=...&city=...)
+    const qName = searchParams.get("name");
+    const qCity = searchParams.get("city");
+    if (qName) {
+      return {
+        id: poiId,
+        name: qName,
+        city: qCity || "",
+        category: searchParams.get("category") || "attraction",
+        description: "",
+        lat: 0,
+        lng: 0,
+        relevance_score: 0,
+        estimated_cost: "",
+        estimated_duration: 0,
+        hidden_gem: false,
+        why_for_you: "",
+        crowd_level: "",
+      };
     }
 
     return null;
@@ -146,6 +174,62 @@ export default function TappaPage() {
       .finally(() => setPiecesLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, poiId]);
+
+  // Fetch AI story + Wikipedia image as soon as POI is known
+  useEffect(() => {
+    if (!poi || enriched || enrichLoading) return;
+    setEnrichLoading(true);
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const params = new URLSearchParams({
+      poi_name: poi.name,
+      city: poi.city || "",
+      poi_id: poi.id || "",
+      description: (poi.description || "").slice(0, 300),
+    });
+    fetch(`${API}/api/city/poi-enrich?${params}`)
+      .then((r) => r.json())
+      .then((d) => setEnriched(d))
+      .catch(() => {})
+      .finally(() => setEnrichLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poi?.id]);
+
+  // Load timeline images when tab is opened
+  useEffect(() => {
+    if (activeTab !== "timeline" || !poi || timelineTriggered) return;
+    setTimelineTriggered(true);
+    setTimelineLoading(true);
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    // First try GET (cached), then POST (generate)
+    fetch(`${API}/api/ai/timeline/${encodeURIComponent(poiId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const imgs: Record<string, string> = {};
+        for (const img of data.images || []) {
+          if (img.image_url) imgs[img.era_label] = img.image_url;
+        }
+        if (Object.keys(imgs).length > 0) {
+          setTimelineImages(imgs);
+          setTimelineLoading(false);
+        } else {
+          // Generate via POST
+          return fetch(
+            `${API}/api/ai/timeline/${encodeURIComponent(poiId)}?poi_name=${encodeURIComponent(poi.name)}&poi_description=${encodeURIComponent((poi.description || "").slice(0, 200))}`,
+            { method: "POST" }
+          )
+            .then((r) => r.json())
+            .then((d) => {
+              const generated: Record<string, string> = {};
+              for (const img of d.images || []) {
+                if (img.image_url) generated[img.era_label] = img.image_url;
+              }
+              setTimelineImages(generated);
+            });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setTimelineLoading(false));
+  }, [activeTab, poi, poiId, timelineTriggered]);
 
   if (!poi) {
     return (
@@ -217,7 +301,15 @@ export default function TappaPage() {
       <div className="min-h-screen pb-8">
         {/* Hero area */}
         <div className="relative h-[280px]">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/30 to-gray-950" />
+          {enriched?.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={enriched.image_url}
+              alt={poi.name}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : null}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-gray-950" />
           <div className="absolute inset-0 flex items-end p-4">
             <div className="w-full">
               <button
@@ -319,21 +411,41 @@ export default function TappaPage() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <p className="text-sm text-white/80 leading-relaxed mb-4">
-                  {poi.why_for_you || poi.description}
-                </p>
+                {/* AI Story */}
+                {enrichLoading && !enriched ? (
+                  <div className="flex items-center gap-2 mb-4 text-white/40 text-sm">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Generazione storia AI...</span>
+                  </div>
+                ) : enriched?.story ? (
+                  <p className="text-sm text-white/85 leading-relaxed mb-4">{enriched.story}</p>
+                ) : (
+                  <p className="text-sm text-white/80 leading-relaxed mb-4">
+                    {poi.why_for_you || poi.description}
+                  </p>
+                )}
+
+                {/* Curiosity card */}
+                {enriched?.curiosity && (
+                  <div className="glass-dark rounded-xl p-3 mb-4 border-l-2 border-primary/50">
+                    <p className="text-[10px] text-primary-light font-semibold uppercase tracking-wide mb-1">Lo sapevi?</p>
+                    <p className="text-sm text-white/80 leading-relaxed italic">{enriched.curiosity}</p>
+                  </div>
+                )}
 
                 {/* Audio narration */}
                 {(() => {
                   const handleNarrate = async () => {
-                    if (narrating) {
+                    if (narratingStatus === "playing") {
                       // Stop playback
                       const audio = document.getElementById("narration-audio") as HTMLAudioElement;
                       if (audio) { audio.pause(); audio.currentTime = 0; }
-                      setNarrating(false);
+                      setNarratingStatus("idle");
                       return;
                     }
-                    setNarrating(true);
+                    if (narratingStatus === "loading") return;
+
+                    setNarratingStatus("loading");
                     try {
                       const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
                       const res = await fetch(`${API}/api/audio/narrate`, {
@@ -347,9 +459,9 @@ export default function TappaPage() {
                           poi_name: poi.name,
                           city: poi.city,
                           mode: "on_demand",
-                          wikipedia_excerpt: poi.description || "",
-                          wikidata_facts: "",
-                          user_profile: { language: "it", cultural_level: "casual" },
+                          wikipedia_excerpt: enriched?.story || poi.description || "",
+                          wikidata_facts: enriched?.curiosity || "",
+                          user_profile: { language: "it", cultural_level: "casual", interests: ["storia", "curiosità"] },
                         }),
                       });
                       const data = await res.json();
@@ -362,43 +474,49 @@ export default function TappaPage() {
                           document.body.appendChild(audio);
                         }
                         audio.src = audioSrc;
-                        audio.onended = () => setNarrating(false);
-                        audio.play();
+                        audio.onended = () => setNarratingStatus("idle");
+                        audio.onpause = () => setNarratingStatus("idle");
+                        audio.onplay = () => setNarratingStatus("playing");
+                        await audio.play();
                       } else {
-                        setNarrating(false);
+                        setNarratingStatus("idle");
                       }
                     } catch {
-                      setNarrating(false);
+                      setNarratingStatus("idle");
                     }
                   };
                   return (
                     <Card
                       onClick={handleNarrate}
-                      className="flex items-center gap-3 mb-3 cursor-pointer"
+                      className="flex items-center gap-3 mb-3 cursor-pointer hover:bg-white/10 transition-colors"
                     >
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          narrating ? "bg-primary animate-pulse" : "bg-primary/20"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          narratingStatus === "loading" ? "bg-primary animate-pulse" : narratingStatus === "playing" ? "bg-primary/40 pulse-ring" : "bg-primary/20"
                         }`}
                       >
-                        <Volume2 size={18} className="text-primary-light" />
+                        {narratingStatus === "loading" ? <Loader2 size={18} className="animate-spin text-primary-light" /> :
+                         narratingStatus === "playing" ? <Pause size={18} className="text-primary-light" /> :
+                         <Volume2 size={18} className="text-primary-light" />}
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium">
-                          {narrating ? "In riproduzione... (tocca per fermare)" : "Raccontami questo posto"}
+                          {narratingStatus === "loading" ? "Generazione AI in corso..." :
+                           narratingStatus === "playing" ? "In riproduzione (tocca per fermare)" :
+                           "Raccontami questo posto"}
                         </p>
                         <p className="text-[10px] text-white/50">
-                          Narrazione AI · ElevenLabs
+                          Narrazione AI con Fun Facts · ElevenLabs
                         </p>
                       </div>
-                      {narrating && (
-                        <div className="flex gap-0.5 items-end h-6">
+                      {narratingStatus === "playing" && (
+                        <div className="flex gap-0.5 items-end h-6 flex-shrink-0">
                           {[...Array(5)].map((_, i) => (
                             <motion.div
                               key={i}
                               animate={{ height: [4, 16, 4] }}
                               transition={{ duration: 0.6, delay: i * 0.1, repeat: Infinity }}
-                              className="w-1 bg-primary rounded-full"
+                              className="w-1 bg-primary-light rounded-t-sm"
                             />
                           ))}
                         </div>
@@ -458,21 +576,38 @@ export default function TappaPage() {
                   ))}
                 </div>
 
-                {/* Image placeholder */}
-                <div className="aspect-square rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center mb-3 border border-white/10">
-                  <div className="text-center">
-                    <span className="text-4xl block mb-2">🏛️</span>
-                    <p className="text-sm font-medium">
-                      {poi.name} — {TIMELINE_ERAS[selectedEra].label}
-                    </p>
-                    <p className="text-xs text-white/50 mt-1">
-                      {TIMELINE_ERAS[selectedEra].description}
-                    </p>
-                    <p className="text-[10px] text-primary-light mt-2">
-                      Immagine generata da DALL-E 3
-                    </p>
-                  </div>
-                </div>
+                {/* Timeline image */}
+                {(() => {
+                  const eraKey = ["100 d.C.", "1200", "1800", "1950"][selectedEra] || "1200";
+                  const imgUrl = timelineImages[eraKey];
+                  return (
+                    <div className="aspect-square rounded-2xl overflow-hidden mb-3 border border-white/10 relative bg-gradient-to-br from-primary/20 to-accent/20">
+                      {timelineLoading && !imgUrl ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+                          <p className="text-xs text-white/50">Generazione con AI...</p>
+                        </div>
+                      ) : imgUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={imgUrl}
+                          alt={`${poi.name} — ${TIMELINE_ERAS[selectedEra].label}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+                          <span className="text-4xl block mb-2">🏛️</span>
+                          <p className="text-sm font-medium">{poi.name} — {TIMELINE_ERAS[selectedEra].label}</p>
+                          <p className="text-xs text-white/50 mt-1">{TIMELINE_ERAS[selectedEra].description}</p>
+                        </div>
+                      )}
+                      <div className="absolute bottom-2 left-2 right-2 flex justify-between">
+                        <span className="glass text-[10px] px-2 py-1 rounded-full font-medium">{TIMELINE_ERAS[selectedEra].label}</span>
+                        {imgUrl && <span className="glass text-[10px] px-2 py-1 rounded-full text-primary-light">DALL-E 3</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Slider */}
                 <input
@@ -982,5 +1117,17 @@ export default function TappaPage() {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+export default function TappaPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <TappaContent />
+    </Suspense>
   );
 }

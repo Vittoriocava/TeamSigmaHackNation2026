@@ -93,10 +93,16 @@ async def generate_city_pois(city: str, profile: UserProfile, budget: str = "med
     _log = _logging.getLogger("playthecity")
 
     # Step 1: AI generates full POI list including approximate coordinates
-    prompt = f"""Sei un esperto di turismo italiano.
+    prompt = f"""Sei un esperto di turismo italiano e guida locale di {city}.
 
-Elenca esattamente 10 luoghi DA VISITARE nella città di {city}, Italia.
+Elenca esattamente 12 luoghi DA VISITARE nella città di {city}, Italia.
 Devono essere luoghi REALI, fisicamente situati nel comune di {city}.
+
+IMPORTANTE: includi una MIX di luoghi:
+- 4 luoghi classici/iconici
+- 4 luoghi insoliti o poco noti (hidden gems, cortili segreti, vicolos nascosti, storie urbane)
+- 2 luoghi legati a leggende locali, misteri o personaggi storici
+- 2 luoghi di street art, mercati, o vita quotidiana autentica
 
 Profilo utente:
 - interessi: {profile.interests}
@@ -105,15 +111,15 @@ Profilo utente:
 
 OUTPUT: SOLO array JSON valido. Inizia con [ e termina con ]. Nessun testo extra.
 
-Ogni oggetto deve avere questi campi:
+Ogni oggetto:
 - "name": nome ufficiale del luogo
-- "description": 2-3 frasi di fatti reali su questo luogo a {city}
+- "description": 2-3 frasi vivide e coinvolgenti. Includi UN fatto sorprendente o poco noto.
 - "lat": latitudine approssimativa (numero decimale)
 - "lng": longitudine approssimativa (numero decimale)
-- "category": uno tra: museum, monument, church, restaurant, park, attraction, viewpoint, theatre, castle, archaeological_site
+- "category": uno tra: museum, monument, church, restaurant, park, attraction, viewpoint, theatre, castle, archaeological_site, street_art, market, legend_site
 - "relevance_score": punteggio 0-10
-- "why_for_you": breve frase perché è adatto all'utente
-- "hidden_gem": true o false
+- "why_for_you": frase che spiega perché questo luogo è speciale PER QUESTO utente specifico
+- "hidden_gem": true se è un luogo insolito o poco turistico
 - "estimated_cost": "gratuito" o "€" o "€€" o "€€€"
 - "crowd_level": "basso" o "medio" o "alto"
 
@@ -237,24 +243,26 @@ Rispondi SOLO con JSON valido:
 
 
 async def generate_story(poi: POI, profile: UserProfile, city: str) -> str:
-    desc = poi.description or f"un luogo significativo nel centro di {city}, in Calabria, Italia"
-    prompt = f"""Sei il narratore di Play The City. Genera una micro-storia coinvolgente per:
+    desc = poi.description or f"un luogo significativo nel centro di {city}, in Italia"
+    prompt = f"""Sei il narratore di Play The City — una guida con la voce di uno storyteller cinematografico.
+
 Luogo: {poi.name}
 Città: {city} (Italia)
-Descrizione verificata: {desc}
+Dati reali: {desc}
 
 Profilo giocatore: interessi {profile.interests}, livello {profile.cultural_level}
 Lingua: {_lang(profile)}
 
-Regole OBBLIGATORIE:
-- 150-250 parole
-- Menziona ESPLICITAMENTE la città "{city}" e la sua posizione geografica reale
-- Usa SOLO fatti geografici e storici verificabili su questo specifico luogo in {city}
-- NON inventare luoghi, eventi o fatti non reali
-- Non iniziare MAI con il nome del luogo
-- Racconta come se il luogo avesse una voce propria
-- Includi un fatto sorprendente poco noto MA verificabile su questo specifico luogo
-- Chiudi con una connessione emotiva o una domanda retorica"""
+Scrivi una storia immersiva di 180-250 parole. Regole:
+- Inizia con una SCENA vivida: un momento storico specifico, un personaggio reale, un dettaglio sensoriale
+- Racconta come se tu fossi LÌ in quel momento — odori, suoni, emozioni
+- Rivela UN segreto o aneddoto che il 95% dei visitatori non conosce
+- Usa SOLO fatti verificabili su {poi.name} a {city}
+- NON iniziare con il nome del luogo
+- Inserisci un personaggio storico reale legato a questo posto, se esiste
+- Chiudi con una domanda o una provocazione che invita l'utente a guardare il luogo con occhi nuovi
+
+Tono: avvincente, come un racconto da ascoltare di notte."""
 
     return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
@@ -511,3 +519,27 @@ Ogni oggetto giorno:
 
 def question_hash(q: QuizQuestion) -> str:
     return hashlib.md5(q.question.encode()).hexdigest()[:12]
+
+
+async def generate_city_character(city: str, date_str: str) -> dict:
+    """Generate a 'character of the day' — a historical figure tied to the city."""
+    prompt = f"""Sei il narratore di Play The City.
+
+Oggi è {date_str}. Genera il PERSONAGGIO DEL GIORNO per la città di {city}, Italia.
+
+Scegli un personaggio storico REALE e verificabile (o una figura leggendaria ben documentata) legata alla città di {city}.
+NON inventare persone. Il personaggio deve essere realmente associato a {city}.
+
+Rispondi SOLO con JSON valido:
+{{
+  "name": "Nome completo del personaggio",
+  "period": "Secolo o periodo storico (es: 'XIV secolo', '1800-1860')",
+  "role": "Ruolo o professione (es: 'Architetto', 'Condottiero', 'Pittore')",
+  "avatar_emoji": "emoji che rappresenta il personaggio",
+  "quote": "Una frase memorabile o attribuita a questo personaggio (in italiano, max 20 parole)",
+  "story": "Una storia coinvolgente di 80-120 parole su questo personaggio e il suo legame con {city}. Scrivi in prima persona come se il personaggio parlasse oggi.",
+  "poi_hint": "Nome di un luogo a {city} associato a questo personaggio"
+}}"""
+
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
+    return _extract_json_object(text)

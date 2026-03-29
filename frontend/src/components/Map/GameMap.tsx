@@ -94,17 +94,18 @@ export function GameMap({
 
     mapInstance.current = map;
 
-    // Fix gray tile bug
-    setTimeout(() => {
-      map.invalidateSize();
+    // Fix gray tile bug — clear timer on unmount to avoid _leaflet_pos crash
+    const invalidateTimer = setTimeout(() => {
+      if (mapInstance.current) map.invalidateSize();
     }, 250);
 
     const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize();
+      if (mapInstance.current) map.invalidateSize();
     });
     resizeObserver.observe(mapRef.current);
 
     return () => {
+      clearTimeout(invalidateTimer);
       resizeObserver.disconnect();
       map.remove();
       mapInstance.current = null;

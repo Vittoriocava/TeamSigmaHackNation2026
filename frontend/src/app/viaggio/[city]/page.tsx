@@ -5,11 +5,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   BookOpen, Camera, ChevronDown, ChevronLeft, ChevronRight,
   Clock, HelpCircle, Link2, MapPin, Moon, Navigation,
-  Play, Shield, Trophy, Utensils,
+  Play, Shield, Trophy, Utensils, Volume2, Loader2, Pause
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { MapPOI } from "@/components/Map/GameMap";
 import { PoiQuizModal } from "@/components/Quiz/PoiQuizModal";
 import { apiGet } from "@/lib/api";
@@ -72,6 +72,71 @@ export default function ViaggioPage() {
   const [activeDay, setActiveDay] = useState(0);
   const [mapExpanded, setMapExpanded] = useState(false);
   const [profilePois, setProfilePois] = useState<MapPOI[]>([]);
+  
+  // Audio guide state
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioStatus, setAudioStatus] = useState<"idle" | "loading" | "playing" | "paused" | "error">("idle");
+
+  // Reset audio when clicking to a different city or changing stop
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [city, currentGame?.currentStopIndex]);
+
+  const toggleAudioGuide = async (poi: any) => {
+    if (audioStatus === "playing" && audioRef.current) {
+      audioRef.current.pause();
+      return;
+    }
+    if (audioStatus === "paused" && audioRef.current) {
+      audioRef.current.play();
+      return;
+    }
+
+    setAudioStatus("loading");
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+
+    try {
+      const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${API}/api/audio/narrate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          poi_id: poi.id,
+          poi_name: poi.name,
+          city: city,
+          mode: "on_demand",
+          wikipedia_excerpt: poi.description || "",
+          user_profile: profile || { interests: ["storia", "curiosità"], cultural_level: "curioso", language: "it" }
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.audio_base64) throw new Error("Audio error");
+
+      const audio = new Audio("data:audio/mpeg;base64," + data.audio_base64);
+      audioRef.current = audio;
+      
+      audio.onended = () => setAudioStatus("idle");
+      audio.onpause = () => setAudioStatus("paused");
+      audio.onplay = () => setAudioStatus("playing");
+      audio.onerror = () => { setAudioStatus("error"); setTimeout(() => setAudioStatus("idle"), 3000); };
+      
+      await audio.play();
+    } catch (e) {
+      setAudioStatus("error");
+      setTimeout(() => setAudioStatus("idle"), 3000);
+    }
+  };
 
   useEffect(() => {
     const slug = city.toLowerCase().replace(/ /g, "-").replace(/'/g, "");
@@ -286,9 +351,22 @@ export default function ViaggioPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <button
-                    onClick={() => router.push(`/tappa/${currentStop.poi.id}`)}
+                    onClick={() => toggleAudioGuide(currentStop.poi)}
+                    className="w-full glass py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-primary/30"
+                  >
+                    {audioStatus === "loading" && <Loader2 size={13} className="animate-spin text-primary" />}
+                    {audioStatus === "playing" && <Pause size={13} className="text-primary-light" />}
+                    {audioStatus === "paused" && <Play size={13} className="text-primary-light" />}
+                    {audioStatus === "idle" && <Volume2 size={13} className="text-primary-light" />}
+                    {audioStatus === "error" && "Errore riproduzione"}
+                    {audioStatus === "loading" ? "Generazione AI in corso (5-10s)..." : audioStatus === "playing" ? "Pausa guida" : audioStatus === "paused" ? "Riprendi guida" : audioStatus === "error" ? "Riprova tra poco" : "Ascolta guida vocale AI"}
+                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => router.push(`/tappa/${currentStop.poi.id}`)}
                     className="flex-1 glass py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
                   >
                     <BookOpen size={13} /> Apri tappa
@@ -306,6 +384,7 @@ export default function ViaggioPage() {
                       ✓ Completata
                     </div>
                   )}
+                  </div>
                 </div>
 
                 {/* Conquista territory */}

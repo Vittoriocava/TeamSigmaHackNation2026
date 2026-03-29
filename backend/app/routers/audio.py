@@ -14,23 +14,26 @@ def _narration_prompt(req: NarrationRequest) -> str:
     lang = langs.get(req.user_profile.language, "italiano")
 
     mode_instructions = {
-        "on_demand": "Narrazione completa, 2-3 minuti. Includi storia, curiosità, connessione emotiva.",
-        "proximity": "Narrazione media, 60-90 secondi. Focus sul perché è speciale questo momento.",
-        "radar": "Narrazione breve, 30-45 secondi. Aggancio curioso immediato per fermare l'utente.",
+        "on_demand": "Narrazione completa, 2-3 minuti. Apri con una SCENA evocativa ambientata nel luogo — un momento storico, un odore, un suono. Poi svela segreti, misteri, aneddoti che pochissimi conoscono. Cita un personaggio storico reale se esiste. Chiudi con una domanda che cambia il modo di guardare il luogo.",
+        "proximity": "Narrazione media, 60-90 secondi. Inizia con un fatto scioccante o un segreto che nessuno conosce. Poi 2-3 dettagli essenziali. Tono da sussurro complice.",
+        "radar": "Narrazione breve, 30-45 secondi. UN singolo fatto così sorprendente che ferma il passo. Nient'altro.",
     }
 
-    return f"""Sei la guida vocale di Play The City a {req.city}.
-Luogo: {req.poi_name}
+    return f"""Sei la voce narrante di Play The City — come un grande storyteller che conosce ogni segreto di {req.city}.
+
+Luogo: {req.poi_name} ({req.city})
 Dati: {req.wikipedia_excerpt}
-Fatti: {req.wikidata_facts}
-Profilo: interessi {req.user_profile.interests}, livello {req.user_profile.cultural_level}
+Contesto aggiuntivo: {req.wikidata_facts}
+Utente: interessi {req.user_profile.interests}, livello {req.user_profile.cultural_level}
 Lingua: {lang}
-Modalità: {req.mode}
 
 {mode_instructions.get(req.mode, mode_instructions["on_demand"])}
 
-Parla in prima persona come se fossi il luogo stesso oppure un narratore che conosce l'utente.
-Non iniziare MAI con il nome del posto. Sii coinvolgente, evocativo, mai scolastico."""
+Regole assolute:
+- MAI iniziare con il nome del posto o con "Benvenuti"
+- Parla come se stessi raccontando un segreto all'orecchio dell'utente
+- Usa dettagli sensoriali: luci, odori, texture, suoni dell'epoca
+- Ogni frase deve guadagnarsi il diritto di esistere — niente riempitivo"""
 
 
 async def _generate_narration_text(req: NarrationRequest) -> str:
