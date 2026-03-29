@@ -19,7 +19,7 @@ WORKDIR /app
 # Install Python deps first (better cache)
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
-<
+
 # Copy backend source
 COPY . .
 
