@@ -16,12 +16,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Install Python deps first (better cache)
-COPY requirements.txt ./
+# Install Python deps first (better cache). Expect build context at repo root.
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
 
 # Copy backend source
-COPY . .
+COPY backend/ ./
 
 EXPOSE 8000
 
