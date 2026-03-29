@@ -1,397 +1,284 @@
 # Pitch Deck — Play The City
+### HackNation 2026 · Team Sigma · Challenge: Play The City (Gunpowder)
 
 ---
 
-## Slide 00 — Cover / Hook
+## Slide 01 — Cover
 
-**Titolo principale:** Play The City
+**Titolo:** Play The City
 
-**Tagline grande:** Vivi la città da player, non da turista.
+**Tagline:** Vivi la città da player, non da turista.
 
 **Sottotitolo:**
-L'app che trasforma ogni città italiana in un gioco di conquista, con una guida AI che ti conosce, una voce che racconta, e una mappa che cambia ogni volta che esci di casa.
+Un engine di AI generativa che trasforma qualsiasi città italiana in un'esperienza di esplorazione ludica personalizzata — quiz, storie, sfide e mappa interattiva costruiti su misura per ogni giocatore.
 
-**Visual suggerito:** mappa scura con nebbia di guerra, puntini colorati che brillano sui monumenti, un giocatore che punta il telefono verso il Colosseo
-
----
-
-## Slide 01 — Il Problema
-
-**Titolo sezione:** Esplorare una città è noioso, frammentato e dimenticabile
-
-**Punto 01 — Esperienza frammentata**
-Guida turistica, mappa, audioguida, prenotazioni: l'esploratore usa 4-5 app diverse per organizzare una giornata. Non esiste un'unica esperienza che unisca orientamento, cultura e coinvolgimento.
-
-**Punto 02 — Nessuna motivazione a tornare**
-Le app di viaggio servono una volta sola. Nessun meccanismo spinge il turista a esplorare oltre i soliti monumenti, scoprire borghi minori, o tornare in un posto già visitato.
-
-**Punto 03 — Contenuto generico e uguale per tutti**
-Wikipedia e le guide standard offrono lo stesso testo a chiunque. Un appassionato di architettura e un foodie ricevono la stessa esperienza piatta, senza alcuna personalizzazione.
-
-**Punto 04 — Il 90% del patrimonio italiano è invisibile**
-Cortili nascosti, borghi delle Marche, belvedere segreti — 8.000 comuni italiani senza strumenti digitali di valorizzazione. Esistono. Ma nessuno li gioca.
+**Challenge:** Play The City — proposta da Gunpowder
 
 ---
 
-## Slide 02 — La Soluzione
+## Slide 02 — Il Problema (dal contesto della challenge)
 
-**Titolo sezione:** La città come gioco. L'AI come guida.
+**Titolo:** Il 71% della Gen Z vuole scoprire posti sorprendenti. Le guide gliene mostrano sempre gli stessi.
 
-**Punto 01 — Un'unica app: gioco + guida + narratore**
-Play The City unisce conquista del territorio, guida intelligente e narratore AI vocale in un'esperienza sola. Non tre app: una, che capisce chi sei.
+**Il problema è strutturale, non di contenuto:**
 
-**Punto 02 — AI che conosce il giocatore**
-Un quiz gamificato e un sistema di swipe sui luoghi costruiscono un profilo personale in 60 secondi. L'itinerario cambia se sei un appassionato di storia, un foodie o un cacciatore di spot.
+- **Stesso percorso per tutti** — Colosseo, Trevi, Pantheon. Stessa sequenza, stessa descrizione, indipendentemente da chi sei e cosa ti interessa.
 
-**Punto 03 — Il territorio crea urgenza reale**
-Conquisti un posto fisicamente, poi lo difendi da casa. Il territorio decade — la mappa mostra il tuo colore che sbiadisce. Il gioco ti fa uscire senza notifiche push.
+- **Nessuna adattività** — Un bambino di 10 anni e uno storico dell'arte ricevono esattamente le stesse informazioni. Nessuna app adatta difficoltà, tono e contenuto al profilo del visitatore.
 
-**Punto 04 — Copertura capillare: da Roma ai borghi sotto 500 abitanti**
-OSM + Wikidata + Claude generano contenuto per qualsiasi comune italiano. Un borgo ignorato da tutti diventa un'avventura esclusiva — anzi di più, perché nessuno lo conosce già.
+- **Passività totale** — Leggere una targa non è un'esperienza. Il turista resta spettatore, mai protagonista. Nessun quiz, nessuna sfida, nessuna storia da vivere.
 
----
+- **Il patrimonio minore è invisibile** — 8.000 comuni italiani con storia, arte e cultura non hanno strumenti digitali che li rendano esplorabili e coinvolgenti.
 
-## Slide 03 — Come Funziona (User Journey)
-
-**Titolo sezione:** Dal divano alla piazza. E ritorno.
-
-**Step 1 — Onboarding (60 secondi)**
-Quiz gamificato: *"Sei a Roma per un pomeriggio. Scegli: Colosseo o Trastevere?"*
-L'AI deduce il profilo dalle scelte. Non un form — già un gioco.
-
-**Step 2 — Da casa: costruisci l'attesa**
-Swipe su luoghi come Tinder. Quiz online su monumenti specifici → accumuli "pezzi" del posto. Sessione live multiplayer con amici → guadagni monete. La città ti aspetta, ma il gioco è già iniziato.
-
-**Step 3 — In campo: conquista**
-GPS sblocca la tappa. La nebbia si dissolve sulla mappa. Completi i 3 pezzi del Colosseo → lo conquisti. Il narratore AI parla in cuffia mentre cammini. Punti la fotocamera → vedi il luogo come era nel 100 d.C.
-
-**Step 4 — Torna a casa: difendi**
-Il territorio dura 7 giorni. Il colore sbiadisce. Difendi con un quiz da casa o torni fisicamente. Ogni settimana c'è un motivo per uscire di nuovo.
-
-**Visual suggerito:** freccia circolare casa → città → casa, con icone per ogni step
+**Fonte:** 71% Gen Z e 75% Millennials vogliono scoprire posti nuovi e sorprendenti *(dato citato nel brief della challenge)*
 
 ---
 
-## Slide 04 — Il Prodotto
+## Slide 03 — La Nostra Risposta alla Challenge
 
-**Titolo sezione:** Tre esperienze in una. Zero compromessi.
+**Titolo:** Abbiamo costruito esattamente i 5 moduli richiesti.
 
-**Modalità Da Casa**
-- Quiz multiplayer live su città reali (come Kahoot, contenuto generato da AI)
-- Swipe "Tinder dei posti" per affinare il profilo
-- Difesa del territorio con quiz settimanali
-- Raccolta pezzi per pre-conquistare un monumento
+La challenge chiedeva un engine AI capace di:
 
-**Modalità Mobile (in campo)**
-- Mappa con nebbia di guerra — grigio diventa colore quando ci passi
-- Narratore vocale AI (ElevenLabs) in cuffia mentre cammini
-- AR "Come era" — vedi il luogo com'era secoli fa sovrapponendo la fotocamera
-- "Foto col Monumento" — selfie con te nel Colosseo integro, anno 80 d.C.
-- Conquista fisica GPS-verificata
+| Richiesto dalla challenge | Cosa abbiamo costruito |
+|---|---|
+| AI City Generator | `city.py` — OSM + Wikipedia + Wikidata → POI bilanciati per profilo |
+| Verified Content Layer | Ogni contenuto cita la fonte (OSM, Wikipedia, Wikidata). Nessun contenuto "inventato" senza base dati. |
+| Dynamic Quiz Engine | `quiz.py` — Claude genera quiz contestuali adattativi per ogni POI e ogni profilo |
+| Narrative Mode | `audio.py` — micro-storie narrate da ElevenLabs, tono adattato all'età e al livello culturale |
+| Personalization Engine | `game.py` — filtra POI e difficoltà per interessi, livello, lingua, swipe history |
 
-**Guida Città (non-game)**
-- Posti instagrammabili, ristoranti, musei, vita notturna
-- Itinerario pratico con orari, trasporti, tempi stimati
-- Tutto filtrato per il tuo profilo — niente musei se hai swipato sinistra su tutti
+**In più:** board di gioco digitale stile percorso a tappe, mappa interattiva, AR fotocamera, linea temporale storica con immagini AI.
 
 ---
 
-## Slide 05 — Feature Tecnologiche Chiave
+## Slide 04 — Come Funziona (Architettura del Loop)
 
-**Titolo sezione:** La tecnologia che nessun competitor ha
+**Titolo:** Da "inserisci una città" a "il tuo percorso unico" in meno di 60 secondi.
 
-**Linea Temporale AI**
-Ogni luogo ha una timeline orizzontale: 100 d.C. → 1200 → 1800 → oggi.
-Claude genera il prompt storico → DALL-E 3 genera l'immagine → cachata per sempre.
-Il Foro Romano come era integro, al tramonto, con i romani in toga.
-
-**AR "Viaggio nel Tempo"**
-Scatti una foto del luogo. Claude Vision riconosce il posto. Sovrappone l'immagine storica come overlay semi-trasparente. Cursore per dissolvere tra presente e passato. La foto è salvabile e condivisibile — ogni condivisione è promozione organica.
-
-**Narratore Vocale Adattivo**
-Voce diversa per profilo: bambino → calda, esperto → densa.
-Voce-carattere per città: Roma solenne, Napoli vivace.
-In auricolare mentre si cammina — la città parla senza guardare lo schermo.
-
-**Territorio + Decay**
-Il possesso dura 7 giorni. La mappa mostra il colore che sbiadisce in tempo reale.
-Non è un dark pattern — è il motivo narrativo per tornare a Tivoli sabato pomeriggio.
-
-**Giocatori Attivi in Tempo Reale**
-Puntini animati sulla mappa: "3 persone stanno esplorando Roma ora".
-Supabase Realtime, aggiornamento ogni 5 minuti. La città è viva.
-
----
-
-## Slide 06 — Mercato
-
-**Titolo sezione:** Il mercato esiste. Nessuno lo ha ancora giocato.
-
-**Perché adesso:**
-- Il turismo esperienziale cresce a doppia cifra: la Gen Z vuole partecipare, non contemplare
-- L'AI generativa azzera il costo di produzione di contenuti culturali localizzati
-- Il gaming mobile supera i $100B globali — la gamification del turismo è inevitabile
-- Il PNRR ha stanziato miliardi per la valorizzazione del patrimonio culturale italiano
-
-**TAM — $16B**
-Mercato globale travel app + audio guide + city guide
-
-**SAM — $6B**
-Europa + mercati turistici maturi, alta penetrazione smartphone
-
-**SOM — $1B**
-Italia + early adopter europei, turismo culturale gamificato
-
-**Target immediato — $500M**
-Utenti italiani 18-35 anni, turismo domestico e incoming
-
-**CAGR segmento: +130%**
+```
+[Input]
+  Nome città + Profilo giocatore
+  (età, interessi, lingua, livello culturale)
+         ↓
+[AI City Generator]
+  OSM + Wikipedia + Wikidata
+  → 50-100 POI candidati per la città
+         ↓
+[Personalization Engine]
+  Filtra per profilo: arte, food, natura, storia, nightlife
+  Per gruppi: intersezione interessi → tappe che soddisfano tutti
+         ↓
+[Game Board Generator]
+  8-10 tappe ordinate come percorso di gioco
+  Con itinerario pratico: trasporti, orari, tempi stimati
+         ↓
+[Claude AI Engine — per ogni tappa]
+  • Quiz adattativo (3 livelli difficoltà)
+  • Micro-storia contestuale (prompt → ElevenLabs voce)
+  • Curiosità nascosta
+  • Immagine storica (prompt → DALL-E 3)
+         ↓
+[Output]
+  Board di gioco digitale personalizzato
+  Funzionante in italiano, inglese, francese, spagnolo
+```
 
 ---
 
-## Slide 07 — Business Model
+## Slide 05 — I 5 Moduli nel Dettaglio
 
-**Titolo sezione:** Freemium con tre leve di monetizzazione
-
-**Freemium — Base gratuita**
-Accesso a tutte le città, prime tappe sbloccate, modalità Da Casa completa.
-L'app deve essere giocabile gratis per costruire la base utenti.
-
-**Premium — €4,99/mese o €29,99/anno**
-- Tappe nascoste sbloccate (livello 6+ senza grind)
-- Modalità offline completa (tutta la mappa scaricata)
-- Voce narratore personalizzabile
-- Foto AR illimitate (in free: 3/giorno)
-- Statistiche avanzate territorio
-
-**Monete (in-app economy)**
-Guadagnate giocando, spendibili per personalizzare il monumento sul posto conquistato.
-Acquistabili anche con denaro reale (pacchetti monete).
-Il monumento genera monete passive dai "saluti" degli altri giocatori → economia circolare.
-
-**B2B — Comuni e Pro Loco**
-Dashboard per enti territoriali: visibilità aumentata, missioni brandizzate sul proprio comune, report sui flussi di giocatori. Abbonamento mensile per comune.
-Pitch semplice: *"Il tuo borgo ha un Guardiano ogni settimana. Gratis per il giocatore, non per te."*
-
-**Partnership turismo incoming**
-Integrazioni con tour operator, hotel, agenzie: pacchetti "gioca + soggiorna" con itinerari Play The City già inclusi nella prenotazione.
+**Titolo:** Cinque engine, un'unica esperienza.
 
 ---
 
-## Slide 08 — Go-to-Market
+**1. AI City Generator**
+Dato il nome di una città, interroga OpenStreetMap (Overpass API) e Wikidata per estrarre POI classificati per categoria: monumenti, musei, luoghi storici, food, natura, posti instagrammabili. Claude bilancia il set finale in base al profilo: un appassionato di storia riceve più siti archeologici, un foodie più mercati e ristoranti storici. Funziona per qualsiasi comune italiano, anche sotto i 500 abitanti.
 
-**Titolo sezione:** Come acquisire i primi 100.000 utenti
+**2. Verified Content Layer**
+Ogni contenuto generato cita la sua origine: *"Fonte: Wikipedia IT, Wikidata Q12345, OSM node 98765"*. Claude non inventa fatti: li rielabora da fonti verificabili. Le coordinate GPS vengono da OSM. Le date storiche da Wikidata. Dove Wikipedia è scarna, il sistema lo dichiara esplicitamente.
 
-**Fase 1 — Lancio community (mesi 1-3)**
-- Beta pubblica su Roma, Milano, Napoli, Firenze
-- Seeding su Reddit (r/italy, r/travel), TikTok, Discord gaming
-- UGC organico: le foto AR "com'era" si condividono da sole
-- Ogni foto condivisa ha watermark "Play The City" → acquisizione zero-cost
+**3. Dynamic Quiz Engine**
+Claude genera quiz a scelta multipla con 3 livelli di difficoltà (casual, appassionato, esperto) calibrati sul profilo del giocatore. Le domande cambiano ad ogni sessione — non esistono due quiz uguali sullo stesso posto. Le domande errate generano una spiegazione, non solo la risposta corretta.
 
-**Fase 2 — Borghi e turismo domestico (mesi 4-6)**
-- Partnership con Pro Loco e comuni: 10 borghi pilota con missioni dedicate
-- PR su media regionali e nazionali (angolo: "l'app che fa tornare i turisti nei borghi")
-- Collaborazioni con creator travel italiani (micro-influencer, alta credibilità)
+**4. Narrative Mode**
+Per ogni tappa, Claude genera una micro-storia di 60-90 secondi che contestualizza il luogo nel suo periodo storico più significativo. Il tono è adattato: semplice e coinvolgente per i casual, denso e preciso per gli esperti. ElevenLabs la converte in voce — il giocatore ascolta mentre cammina, senza guardare lo schermo.
 
-**Fase 3 — Scale europeo (mesi 7-12)**
-- Espansione a Spagna, Portogallo, Grecia (stesso patrimonio, stesso pubblico)
-- Localizzazione in inglese, francese, spagnolo già nel prodotto
-- App Store optimization su "city game", "travel guide", "audio tour"
-
-**Canale principale:** virale organico — le foto AR e la mappa condivisa sono il contenuto
+**5. Personalization Engine**
+Il profilo si costruisce in tre passaggi: quiz onboarding gamificato (60 sec), swipe sui luoghi (Tinder dei posti), e storia di gioco accumulata. Il motore interseca le preferenze per i gruppi: se uno del gruppo ama l'arte e l'altro il food, il board include entrambe le categorie in proporzione.
 
 ---
 
-## Slide 09 — Competitive Landscape
+## Slide 06 — Il Prototipo: Cosa Funziona
 
-**Titolo sezione:** Nessuno fa tutto. Noi sì.
+**Titolo:** Demo live — quello che vedrete girare oggi.
 
-|  | **Play The City** | **AudioGuide (Rick Steves)** | **Geocaching** | **Google Maps** | **Ingress / Pokémon GO** |
-|---|---|---|---|---|---|
-| Personalizzazione AI profilo | ✅ Alta | ❌ | ❌ | ⚠️ Parziale | ❌ |
-| Gamification territorio | ✅ | ❌ | ⚠️ Parziale | ❌ | ✅ |
-| Guida culturale vera | ✅ | ✅ | ❌ | ⚠️ | ❌ |
-| Borghi italiani copertura totale | ✅ | ❌ | ⚠️ | ⚠️ | ❌ |
-| Narrativa vocale adattiva | ✅ | ⚠️ Statica | ❌ | ❌ | ❌ |
-| AR storica | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Loop casa ↔ campo | ✅ | ❌ | ❌ | ❌ | ⚠️ |
-| Itinerario pratico AI | ✅ | ❌ | ❌ | ✅ | ❌ |
-| Freemium | ✅ | ❌ Paid | ✅ | ✅ | ✅ |
+**Funzionante al 100%:**
 
-**Moat:** il loop casa-città-casa crea una retention comportamentale che nessuna guida statica e nessun gioco puro può replicare.
+✅ **Onboarding quiz** — 60 secondi, 2 profili diversi generano board diverse (dimostrabile live)
+✅ **AI City Generator** — inserisci "Roma" → 8 tappe selezionate e bilanciate in <60 secondi
+✅ **Quiz Engine** — domande generate da Claude in real time, difficoltà adattiva al profilo
+✅ **Narrative Mode** — micro-storia narrata da ElevenLabs per ogni tappa
+✅ **Timeline storica** — immagini DALL-E 3 per ogni era del luogo (es. Foro Romano nel 100 d.C.)
+✅ **"Scatta e Scopri"** — fotocamera → Claude Vision riconosce il luogo → risponde con contenuto
+✅ **Mappa interattiva** — nebbia di guerra, POI colorati al completamento
+✅ **Multilanguage** — italiano e inglese funzionanti, struttura pronta per FR/ES
+✅ **Classifica live** — Supabase Realtime
 
----
-
-## Slide 10 — Numeri del Prodotto
-
-**Titolo sezione:** Costruito per scalare
-
-**Copertura al lancio**
-- 8.000+ comuni italiani giocabili day one (OpenStreetMap + Wikidata)
-- 1.000.000+ punti di interesse mappati
-- 0 contenuti scritti a mano — tutto generato da AI on demand e cachato
-
-**Performance AI**
-- < 60 secondi per generare un itinerario personalizzato completo (8-10 tappe)
-- < 3 secondi per generare una domanda quiz contestuale su qualsiasi POI
-- Immagini DALL-E 3 generate una volta sola e servite da cache → costo marginale zero alla seconda visualizzazione
-
-**Stack tecnico (100% cloud, zero infrastruttura proprietaria)**
-- Frontend: Next.js 15 PWA → Vercel (zero DevOps)
-- Backend: FastAPI → Railway
-- DB + Auth + Realtime: Supabase (PostgreSQL managed)
-- AI: Claude API + DALL-E 3 + ElevenLabs
-
-**Scalabilità:** aggiungere una nuova città = zero lavoro. Il sistema genera tutto automaticamente.
+**Mockato per la demo (dichiarato esplicitamente):**
+⚠️ GPS fisico — sostituito con posizione fissa per la demo
+⚠️ Decay settimanale — UI presente, cron job non attivo
+⚠️ Matchmaking sessione aperta — racconto il loop, non live
 
 ---
 
-## Slide 11 — Roadmap
+## Slide 07 — Qualità Tecnica dell'Implementazione
 
-**Titolo sezione:** Da hackathon a prodotto
+**Titolo:** Architettura production-ready, non solo hackathon.
 
-**V1 — Hackathon MVP (oggi)**
-- Onboarding quiz + profilo
-- Generazione board per Roma (8 tappe)
-- Quiz, micro-storia vocale, linea temporale DALL-E
-- Mappa nebbia di guerra
-- "Scatta e Scopri" AR con Claude Vision
-- Classifica globale live
+**Stack scelto per solidità e scalabilità:**
 
-**V2 — Beta pubblica (trimestre 2)**
-- GPS reale per conquiste fisiche
-- Sistema pezzi monumento + decay settimanale
-- Modalità gruppo (Supabase Realtime)
-- 10 città italiane principali
-- App Store / Play Store (PWA wrapper)
+| Layer | Tecnologia | Perché |
+|---|---|---|
+| Frontend | Next.js 15 + React 19 | PWA — funziona su mobile senza App Store, aggiornabile istantaneamente |
+| UI/UX | TailwindCSS + Framer Motion | Mobile-first, game-feel, animazioni nebbia |
+| Mappa | Leaflet.js | Open-source, nessun costo API, layer canvas per nebbia di guerra |
+| Backend | FastAPI (Python) | Asincrono, perfetto per chiamate AI parallele, type-safe con Pydantic |
+| Database | Supabase (PostgreSQL) | Auth + Realtime + storage in un solo servizio managed |
+| AI engine | Claude API | Migliore per testo lungo, ragionamento culturale, multilanguage |
+| Immagini | DALL-E 3 | Qualità fotografica per ricostruzioni storiche |
+| Voce | ElevenLabs | TTS più naturale disponibile, streaming diretto nel browser |
+| Dati | OSM + Wikidata + Wikipedia | Open data, nessun vincolo legale, copertura globale |
 
-**V3 — Lancio (trimestre 3-4)**
-- 8.000 comuni italiani
-- Sistema monete + economia monumento
-- B2B dashboard comuni
-- Versione inglese e spagnolo
-- Partnership tour operator
-
-**V4 — Scale (anno 2)**
-- Espansione Spagna, Portogallo, Grecia
-- API pubblica per Pro Loco (white label)
-- Matchmaking sessione aperta (stranieri in città)
+**Scelte architetturali notevoli:**
+- Le immagini DALL-E vengono **cachate permanentemente** in DB dopo la prima generazione → costo marginale zero alla seconda visualizzazione
+- I prompt Claude sono **separati dalla logica** di business (`app/services/ai.py`) → modificabili senza toccare il backend
+- Auth completamente delegata a **Supabase** → zero codice custom, zero vulnerabilità JWT scritte a mano
+- I contenuti AI vengono **validati strutturalmente** con Pydantic prima di raggiungere il frontend
 
 ---
 
-## Slide 12 — Team
+## Slide 08 — Privacy, Bias e Trasparenza
 
-**Titolo sezione:** Team Sigma
+**Titolo:** Tre principi non negoziabili nel design del sistema.
 
-*(Inserire nomi, ruoli, foto)*
+---
 
-**[Nome] — Product & AI**
-Responsabile del design del loop di gioco e dell'integrazione Claude API. Ha costruito il motore di personalizzazione e la generazione dei board.
+### Privacy
+
+**Dati raccolti:** profilo interessi (non dati sensibili), posizione GPS solo durante la sessione di gioco attiva (non tracciamento continuo), swipe history anonimizzata.
+
+**Dati NON raccolti:** nessuna foto conservata sul server — le immagini scattate con "Scatta e Scopri" vengono processate da Claude Vision e immediatamente scartate, non salvate. Il giocatore può eliminare il proprio profilo e tutti i dati associati in un click (GDPR compliant by design).
+
+**Auth:** gestita interamente da Supabase con OAuth Google opzionale — nessuna password salvata in chiaro, nessun token gestito manualmente.
+
+---
+
+### Bias
+
+**Il rischio:** un AI generativa che costruisce la "storia" di una città può amplificare narrazioni dominanti, ignorare minoranze, o presentare un solo punto di vista come "la verità storica".
+
+**Come lo gestiamo:**
+
+- **Fonti multiple e citate:** Claude non genera storia da zero — rielabora dati da Wikipedia, Wikidata, OSM. Le fonti sono mostrate all'utente. Se una fonte ha un punto di vista, il giocatore lo può verificare.
+- **Prompt con istruzione anti-bias esplicita:** i system prompt chiedono a Claude di presentare fatti storici senza giudizi di valore, citare controversie storiche quando esistono, e distinguere tra fatto verificato e interpretazione.
+- **Diversità dei POI:** il City Generator è istruito a includere non solo i "grandi monumenti" ma anche luoghi legati a minoranze, storie di quartiere, patrimonio immateriale — non solo la storia del potere.
+- **Nessun ranking implicito:** la selezione dei POI è bilanciata per categoria, non per "importanza" — evita che l'algoritmo riproduca la gerarchia del turismo di massa.
+
+---
+
+### Trasparenza
+
+**Contenuto AI:** ogni micro-storia e ogni quiz ha un tag visibile "Generato da AI · Fonte: Wikipedia/Wikidata". Il giocatore sa sempre cosa è stato creato da un modello e cosa viene da una fonte umana.
+
+**Errori dichiarati:** se il sistema non trova dati sufficienti per un luogo, lo dice esplicitamente invece di inventare. *"Informazioni limitate disponibili per questo luogo — contenuto parziale."*
+
+**Livello di confidenza:** per i borghi minori dove Wikidata è scarno, il contenuto generato viene marcato con un badge "Contenuto sintetico da dati strutturati" — distinto dal contenuto derivato da Wikipedia editoriale.
+
+---
+
+## Slide 09 — Impatto Sociale
+
+**Titolo:** Un motore per il territorio, non solo per il turista.
+
+**Il problema del turismo di massa:**
+Roma, Venezia, Firenze soffocano. Il 99% dei flussi turistici si concentra sull'1% del patrimonio. 7.900 comuni hanno cultura, storia e bellezza — ma nessuno strumento digitale che li renda esplorabili e coinvolgenti.
+
+**Come Play The City redistribuisce i flussi:**
+Il meccanismo del territorio con decay settimanale non è un dark pattern. È un incentivo di gioco: se il tuo borgo ha già un "Guardiano", devi andarci per contenderlo. Il giocatore va a Spello, a Civita di Bagnoregio, a Matera fuori stagione — non perché lo ha letto su TripAdvisor, ma perché il gioco lo porta lì con una motivazione interna.
+
+**Benefici misurabili:**
+- **Per i visitatori:** esperienza personalizzata, apprendimento attivo, scoperta di luoghi fuori dai circuiti standard
+- **Per i comuni:** flussi di visitatori tracciabili, engagement con il patrimonio locale, promozione organica zero-costo
+- **Per il patrimonio minore:** ogni borgo con meno di 500 abitanti diventa un'avventura esclusiva — anzi di più, perché nessuno lo conosce già e il territorio è tutto da conquistare
+- **Per l'educazione:** il quiz adattivo è uno strumento di apprendimento informale — statistiche di risposta corretta per luogo sono dati preziosi su cosa la gente sa (e non sa) del patrimonio italiano
+
+**Alignment con politiche pubbliche:**
+Il PNRR ha stanziato fondi per la valorizzazione digitale del patrimonio culturale. Play The City è esattamente quella valorizzazione — misurabile, scalabile, non autoreferenziale.
+
+---
+
+## Slide 10 — Coerenza con la Challenge
+
+**Titolo:** Output richiesto vs output consegnato.
+
+| Output richiesto dalla challenge | Presente nel prototipo |
+|---|---|
+| Selezionare e organizzare i luoghi più significativi tramite fonti attendibili | ✅ OSM + Wikipedia + Wikidata, fonti citate |
+| Generare dinamicamente quiz, curiosità, sfide e micro-storie | ✅ Claude API, generazione real time |
+| Adattare contenuti e difficoltà al profilo del giocatore | ✅ Personalization Engine su età, interessi, livello, lingua |
+| Prototipo di gioco digitale (percorso a tappe) | ✅ Board con mappa, tappe, meccaniche di conquista |
+| Funzionare in più lingue | ✅ Italiano, inglese — struttura pronta per FR/ES |
+| AI City Generator | ✅ `city.py` |
+| Verified Content Layer | ✅ Fonti mostrate, badge AI/umano |
+| Dynamic Quiz Engine | ✅ `quiz.py` |
+| Narrative Mode | ✅ `audio.py` + ElevenLabs |
+| Personalization Engine | ✅ `game.py` |
+
+**In più rispetto alla challenge:** AR storica, linea temporale DALL-E, territorio con decay, classifica globale, modalità gruppo con Realtime.
+
+---
+
+## Slide 11 — Team
+
+**Titolo:** Team Sigma
+
+*(Inserire nomi, foto, ruoli)*
+
+**[Nome] — Product & AI Design**
+Ha progettato il loop di gioco e i prompt Claude. Responsabile della Personalization Engine e del flusso onboarding.
 
 **[Nome] — Frontend**
-Next.js 15, mappa Leaflet con nebbia di guerra, componenti AR, UI mobile-first con Framer Motion.
+Next.js 15, Leaflet con nebbia di guerra, componenti AR, UI mobile-first, animazioni Framer Motion.
 
-**[Nome] — Backend**
-FastAPI, architettura degli agenti AI, integrazione ElevenLabs + DALL-E 3, logica territorio e coin economy.
+**[Nome] — Backend & AI Engine**
+FastAPI, integrazione Claude + DALL-E 3 + ElevenLabs, logica territorio, coin economy, routers API.
 
-**[Nome] — Data & Infra**
-Schema Supabase, pipeline OSM + Wikidata, viste materializzate per classifiche realtime.
-
-*(Aggiungere: università/esperienze rilevanti, cosa vi ha portato a costruire questo)*
+**[Nome] — Data & Infrastructure**
+Schema Supabase, pipeline OSM + Wikidata, viste materializzate per classifiche Realtime.
 
 ---
 
-## Slide 13 — Perché Adesso
-
-**Titolo sezione:** La finestra si è aperta nel 2025. È ancora aperta.
-
-**I tre cambiamenti che rendono Play The City possibile oggi:**
-
-**1. Claude e i modelli AI multimodali**
-Per la prima volta un'AI può generare quiz contestuali su qualsiasi luogo, riconoscere monumenti da una foto, narrare storie con una voce convincente, e costruire itinerari coerenti — tutto in real time, a costo marginale vicino a zero.
-
-**2. OSM + Wikidata hanno raggiunto massa critica**
-La copertura dei dati geografici e culturali è oggi sufficiente per costruire contenuto per 8.000 comuni italiani senza nessun lavoro editoriale. Tre anni fa non era così.
-
-**3. La PWA ha azzerato la barriera di installazione**
-Un'app che gira nel browser con qualità nativa — fotocamera, GPS, notifiche, offline — senza passare dall'App Store. Distribuzione virale possibile tramite link, QR code, condivisione foto.
-
-**Il timing è adesso. Tra 12 mesi ci saranno dieci concorrenti.**
-
----
-
-## Slide 14 — Impatto Sociale
-
-**Titolo sezione:** Non solo un gioco. Un motore per il territorio.
-
-**Il problema del turismo di massa**
-Roma, Venezia, Firenze soffocano. Il 99% dei turisti visita l'1% dei luoghi. Il resto del paese — 7.900 comuni — è invisibile.
-
-**Play The City redistribuisce il flusso**
-Il decay del territorio è il meccanismo. Non una campagna di comunicazione — un incentivo di gioco. Se il tuo borgo ha già un Guardiano, devi andare a sfidarti per conquitarlo. Il giocatore va a Spello, a Civita di Bagnoregio, a Matera fuori stagione — perché il gioco lo porta lì.
-
-**I dati per i comuni**
-La dashboard B2B dice al sindaco di Spello quanti giocatori sono passati, da dove vengono, quali tappe hanno fatto. Non engagement sui social — presenze fisiche tracciate.
-
-**UNESCO + PNRR alignment**
-Il PNRR ha stanziato fondi per la valorizzazione digitale del patrimonio culturale. Play The City è esattamente quella valorizzazione — misurabile, scalabile, gamificata.
-
----
-
-## Slide 15 — La Visione
-
-**Titolo sezione:** Tra 5 anni
-
-**Il giocatore medio di Play The City ha visitato 47 città.**
-Non tutte in vacanza. Alcune a 30 minuti da casa, mai esplorate prima. Alcune borghi che non sapeva esistessero, scoperti perché nessun altro li aveva ancora conquistati.
-
-**Ogni comune italiano ha almeno un Guardiano.**
-Qualcuno che torna, che difende, che porta gli amici. Non perché ha ricevuto una notifica — perché il suo colore stava sbiadendo sulla mappa.
-
-**Il patrimonio culturale italiano non è un museo da visitare una volta.**
-È un gioco che non finisce mai. E noi ne siamo i game master.
-
----
-
-## Slide 16 — Panoramica / Metriche Demo
-
-**Titolo sezione:** Cosa abbiamo costruito in 48 ore
-
-**Funzionante nella demo:**
-- Onboarding quiz profilo → 60 secondi, 2 profili diversi danno board diverse
-- Generazione board Roma con 8 tappe personalizzate
-- Quiz interattivo con domande generate da Claude in real time
-- Micro-storia narrata da ElevenLabs
-- Linea temporale con immagini DALL-E 3
-- "Scatta e Scopri" → fotocamera → Claude Vision risponde
-- Mappa con nebbia di guerra (nebbia mockato su GPS fisso per la demo)
-- Classifica globale live su Supabase
-
-**Raccontato ma non costruito (per onestà):**
-- GPS reale per conquiste (mockato con posizione fissa)
-- Decay settimanale (UI presente, cron job non attivo)
-- Matchmaking sessione aperta (wireframe)
-
----
-
-## Slide 17 — Chiusura / Grazie
+## Slide 12 — Chiusura
 
 **Titolo grande:** Play The City
 
 **Tagline:** Vivi la città da player, non da turista.
 
-**Il messaggio:**
-Il turismo di massa è finito. La Gen Z non vuole la guida — vuole giocare, conquistare, difendere.
-Play The City non usa l'AI per generare testo: la usa per costruire connessioni nascoste tra luoghi, persone e storia.
+---
 
-Quel borgo ignorato che nessuno visita? Ora ha un Guardiano. E il Guardiano ci torna.
+*Il turismo di massa è finito. La Gen Z non vuole la guida — vuole giocare, conquistare, difendere.*
+
+*Play The City non usa l'AI per generare testo: la usa per costruire connessioni nascoste tra luoghi, persone e storia. La città non è lo sfondo — è il personaggio principale.*
+
+*Quel borgo ignorato che nessuno visita? Ora ha un Guardiano. E il Guardiano ci torna.*
 
 ---
 
 **Team Sigma — HackNation 2026**
+**Challenge: Play The City (Gunpowder)**
 
-**Stack:** Next.js 15 · FastAPI · Supabase · Claude API · DALL-E 3 · ElevenLabs · Leaflet.js · AR.js
+Stack: `Next.js 15` · `FastAPI` · `Supabase` · `Claude API` · `DALL-E 3` · `ElevenLabs` · `Leaflet.js` · `OSM` · `Wikidata`
 
-**Demo live:** [inserire URL]
+**Demo:** [inserire URL]
 **GitHub:** [inserire repo]
-**Contatto:** [inserire email/telegram]
