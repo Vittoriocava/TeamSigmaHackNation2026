@@ -18,6 +18,9 @@ interface City {
 
 const STOP_TYPES = ["story", "quiz", "curiosity", "challenge", "connection", "ar", "geoguessr"];
 
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
+const withBase = (path: string) => `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+
 function slugify(city: string) {
   return city.toLowerCase().replace(/\s+/g, "-").replace(/'/g, "");
 }
@@ -78,9 +81,7 @@ function NewBoardContent() {
 
   const fetchCities = async () => {
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/city/list`
-      );
+      const res = await fetch(withBase("/api/city/list"));
       const data = await res.json();
       setCities(data.cities || []);
     } catch (err) {
@@ -130,23 +131,43 @@ function NewBoardContent() {
     }
 
     // Fallback: call create-demo for cities without a planned trip
-    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     try {
-      const gameRes = await fetch(`${API}/api/game/create-demo`, {
+      const payload = {
+        city: city.name,
+        mode,
+        duration_days: 1,
+        budget: "medio",
+        profile: { interests: [] },
+      };
+
+      const gameRes = await fetch(withBase("/api/game/create-demo"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          city: city.name,
-          mode,
-          duration_days: 1,
-          budget: "medio",
-          profile: { interests: [] },
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (!gameRes.ok) throw new Error(`API error: ${gameRes.status}`);
+      let gameData: any;
+      if (!gameRes.ok) {
+        const fallbackBody = await gameRes.text();
+        if (gameRes.status === 404) {
+          const fullRes = await fetch(withBase("/api/game/create"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
-      const gameData = await gameRes.json();
+          if (!fullRes.ok) {
+            const detail = await fullRes.text();
+            throw new Error(`API error: ${fullRes.status} ${detail}`.trim());
+          }
+          gameData = await fullRes.json();
+        } else {
+          throw new Error(`API error: ${gameRes.status} ${fallbackBody}`.trim());
+        }
+      } else {
+        gameData = await gameRes.json();
+      }
+
       const resolvedGameId = gameData.game_id || gameId;
 
       if (gameData.board) {
