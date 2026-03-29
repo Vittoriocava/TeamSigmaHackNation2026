@@ -30,4 +30,4 @@ EXPOSE 8080
 
 # In standalone, il server si avvia direttamente senza npm
 # Lasciamo che Next legga automaticamente $PORT e $HOSTNAME dall'ambiente
-CMD ["sh", "-c", "npm run start -- --hostname 0.0.0.0 --port ${PORT}"]
+CMD ["node", "server.js"]
