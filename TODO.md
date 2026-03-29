@@ -26,17 +26,23 @@
 
 ## 🔴 Ancora da fare
 
+(Tutti completati! 🎉)
+
+---
+
+## ✅ Completati (sessione 2)
+
 ### C1 — Pagina città per viaggi attivi
-- [ ] Navbar bottom nella pagina città
+- [x] Navbar bottom nella pagina città
 - [x] Mappa con itinerario per giorno
 - [x] Posti da scoprire + posti conquistati (mappa che si scopre camminando)
-- [ ] Nella mappa i POI sembrano apperire già scoperti in alcuni casi
-- [ ] A volte gli account nuovi hanno già degli itinerari
+- [x] Fix POI che appaiono già scoperti nei viaggi futuri
+- [x] Fix account nuovi che ereditano itinerari da sessioni precedenti
 
 ### C3 — Posti di interesse su mappa in base a profilo
-- [ ] Nella mappa, oltre ai posti conquistati, mostrare POI piccoli basati sul profilo utente
+- [x] Nella mappa, POI personalizzati (cyan) basati sul profilo utente — endpoint + frontend
 
-### C5 — Conquista territorio + quiz a 4 livelli di difficoltà
+### C5 — Fix errore setUserPositionStore
 - [x] Conquista posto se hai i pezzi 
 - [x] Per confermare il possesso bisogna essere sul posto fisicamente
 - [x] Possesso dura 1 mese
@@ -45,20 +51,15 @@
 - [x] Per rubare un posto: completare tutte le domande del livello attuale
 - [x] Se hai già fatto le domande da casa e hai i pezzi: conquista immediata
 - [x] **Non ripetere stesse domande** — salvare quelle già usate nel DB
-- [ ]   Bisogna fixare questo errore per il testing manuale con i click del gps:
-  120 |     const handleMapClick = (e: L.LeafletMouseEvent) => {
-  121 |       setCurrentPos([e.latlng.lat, e.latlng.lng]);
-> 122 |       setUserPositionStore({ lat: e.latlng.lat, lng: e.latlng.lng });
-      |       ^
-  123 |     };
-  124 |
-  125 |     if (allowClickMovement) {
+- [x] Fix setUserPositionStore: aggiunto `setUserPosition` + `userPosition` allo store Zustand
 
 ### C6 — "Indietro nel tempo" contenuto reale
-- [ ] Integrazione agente Vision AI per generare foto del passato
-- [ ] Rimuovere contenuto placeholder nella tab
+- [x] Integrazione agente Vision AI per generare foto del passato (camera + /api/ai/vision/come-era)
+- [x] Rimosso contenuto placeholder nella tab — ora con camera, selettore era, risultato AI
 
 ### C7 — Sfida settimanale della città (foto recognition)
-- [ ] Ogni settimana cambia il luogo da trovare
-- [ ] Utente scatta foto → agente AI verifica se è corretto
-- [ ] I primi che trovano il luogo guadagnano più XP
+- [x] Ogni settimana cambia il luogo da trovare (challenge.py + generate endpoint)
+- [x] Utente scatta foto → agente AI verifica se è corretto (Vision AI + analyze_photo)
+- [x] I primi che trovano il luogo guadagnano più XP (500→300→200→150→100...)
+- [x] Pagina sfida completa (sfida/page.tsx) + card nella home + BottomNav aggiornata
+

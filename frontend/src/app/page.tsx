@@ -2,7 +2,7 @@
 
 import { useStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronRight, MapPin, Search, Shield, User, Zap } from "lucide-react";
+import { Camera, ChevronRight, MapPin, Search, Shield, User, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -234,6 +234,26 @@ export default function HomePage() {
             </AnimatePresence>
           </div>
         )}
+      </section>
+
+      {/* Sfida Settimanale */}
+      <section className="px-4 mb-6">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => router.push("/sfida")}
+          className="w-full glass rounded-2xl p-4 flex items-center gap-4 hover:bg-white/10 transition-all border border-primary/20 bg-gradient-to-r from-primary/10 to-transparent"
+        >
+          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <Camera size={22} className="text-primary-light" />
+          </div>
+          <div className="text-left flex-1">
+            <p className="font-display font-bold text-sm">Sfida Settimanale</p>
+            <p className="text-[11px] text-white/50">
+              Trova il luogo misterioso e guadagna fino a 500 XP
+            </p>
+          </div>
+          <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
+        </motion.button>
       </section>
 
       {/* Azioni da fare */}

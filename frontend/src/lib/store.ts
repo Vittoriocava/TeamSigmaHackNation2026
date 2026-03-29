@@ -117,6 +117,7 @@ interface AppStore {
   token: string | null;
   coins: number;
   isHydrated: boolean;
+  userPosition: { lat: number; lng: number } | null;
 
   // Trip planning (not persisted — session only)
   trip: TripState;
@@ -128,6 +129,7 @@ interface AppStore {
   setCurrentGame: (game: GameState | null) => void;
   setToken: (token: string | null) => void;
   setCoins: (coins: number) => void;
+  setUserPosition: (pos: { lat: number; lng: number } | null) => void;
   completeStop: (index: number) => void;
   setTrip: (trip: Partial<TripState>) => void;
   saveItinerary: (itinerary: SavedItinerary) => void;
@@ -151,6 +153,7 @@ export const useStore = create<AppStore>()(
       token: null,
       coins: 0,
       isHydrated: false,
+      userPosition: null,
       trip: DEFAULT_TRIP,
       savedItineraries: [],
 
@@ -159,6 +162,7 @@ export const useStore = create<AppStore>()(
       setCurrentGame: (game) => set({ currentGame: game }),
       setToken: (token) => set({ token }),
       setCoins: (coins) => set({ coins }),
+      setUserPosition: (pos) => set({ userPosition: pos }),
       setTrip: (partial) =>
         set((state) => ({ trip: { ...state.trip, ...partial } })),
       saveItinerary: (itinerary) =>
@@ -189,6 +193,7 @@ export const useStore = create<AppStore>()(
           currentGame: null,
           token: null,
           coins: 0,
+          userPosition: null,
           trip: DEFAULT_TRIP,
           savedItineraries: [],
         }),

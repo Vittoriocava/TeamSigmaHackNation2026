@@ -797,4 +797,63 @@ async def rank_city_pois(city_name: str,
 
     ranked = await rank_pois(pois, profile, city_name, budget)
     return {"city": city_name, "count": len(ranked), "pois": ranked}
-    return {"city": city_name, "count": len(ranked), "pois": ranked}
+
+
+# ──────────────────────────────────────────────
+# Profile-based POI suggestions
+# ──────────────────────────────────────────────
+
+INTEREST_CATEGORY_MAP = {
+    "arte": ["museum", "cultura", "monument", "church", "attraction"],
+    "storia": ["museum", "cultura", "monument", "castle", "archaeological_site", "church"],
+    "architettura": ["monument", "church", "castle", "cultura", "attraction"],
+    "fotografia": ["instagrammabili", "viewpoint", "monument", "park"],
+    "natura": ["park", "natura", "garden", "viewpoint"],
+    "food": ["food", "restaurant", "cafe"],
+    "nightlife": ["nightlife", "bar", "restaurant"],
+    "shopping": ["shopping", "attraction"],
+    "musica": ["theatre", "cultura", "attraction"],
+    "sport": ["park", "natura", "garden"],
+    "scienza": ["museum", "cultura", "attraction"],
+    "religione": ["church", "monument", "cultura"],
+}
+
+
+@router.get("/{city_name}/profile-pois")
+async def get_profile_pois(city_name: str, interests: str = ""):
+    """Get POI suggestions based on user interests."""
+    interest_list = [i.strip().lower() for i in interests.split(",") if i.strip()] if interests else []
+
+    # Get POIs from local data or Overpass
+    if city_name in CITY_POIS:
+        all_pois = CITY_POIS[city_name]
+    else:
+        try:
+            query = build_overpass_query(city_name)
+            data = await fetch_overpass(query)
+            all_pois = parse_overpass(data)
+        except Exception:
+            return {"city": city_name, "pois": []}
+
+    if not interest_list:
+        return {"city": city_name, "pois": all_pois[:5]}
+
+    # Build set of matching categories from interests
+    matching_categories: set[str] = set()
+    for interest in interest_list:
+        cats = INTEREST_CATEGORY_MAP.get(interest, [])
+        matching_categories.update(cats)
+
+    if not matching_categories:
+        matching_categories = {"attraction", "monument", "museum"}
+
+    # Score and filter POIs
+    scored = []
+    for poi in all_pois:
+        cat = poi.get("category", "").lower()
+        if cat in matching_categories:
+            scored.append(poi)
+
+    # Return top 8 matches, or fall back to first 5
+    result = scored[:8] if scored else all_pois[:5]
+    return {"city": city_name, "pois": result, "matched_interests": interest_list}
