@@ -3,6 +3,7 @@
 import { BottomNav } from "@/components/UI/BottomNav";
 import { Card } from "@/components/UI/Card";
 import { useStore } from "@/lib/store";
+import { apiGet } from "@/lib/api";
 import { motion } from "framer-motion";
 import {
 	ChevronRight,
@@ -17,18 +18,51 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const MOCK_LEADERBOARD = [
-  { rank: 1, name: "GladiatorMax", score: 8420, level: 22 },
-  { rank: 2, name: "RomaQueen", score: 7100, level: 19 },
-  { rank: 3, name: "BorgheseKid", score: 6200, level: 16 },
-];
+interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  score: number;
+  level: number;
+}
 
 export default function ProfiloPage() {
   const router = useRouter();
   const [tab, setTab] = useState<"profilo" | "classifica">("profilo");
   const [showMenu, setShowMenu] = useState(false);
-  const { user, profile, reset, isHydrated } = useStore();
+  const { user, profile, reset, isHydrated, token } = useStore();
   const [userRank, setUserRank] = useState<number | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [territoryCount, setTerritoryCount] = useState(0);
+
+  // Fetch leaderboard
+  useEffect(() => {
+    if (!isHydrated || !user) return;
+    apiGet<{ leaderboard: { id: string; display_name: string; level: number; xp: number }[] }>(
+      "/api/leaderboard?limit=50", token ?? undefined
+    ).then((data) => {
+      const entries = data.leaderboard.map((u, i) => ({
+        rank: i + 1,
+        name: u.display_name || "Anonimo",
+        score: u.xp || 0,
+        level: u.level || 1,
+      }));
+      setLeaderboard(entries);
+      const myIdx = data.leaderboard.findIndex((u) => u.id === user.id);
+      if (myIdx >= 0) setUserRank(myIdx + 1);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated, user?.id]);
+
+  // Fetch territory count
+  useEffect(() => {
+    if (!isHydrated || !user) return;
+    apiGet<{ territories: unknown[] }>(
+      `/api/territory/user/${user.id}`, token ?? undefined
+    ).then((data) => {
+      setTerritoryCount(data.territories?.length ?? 0);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated, user?.id]);
 
   useEffect(() => {
     if (!isHydrated || !user) {
@@ -51,11 +85,11 @@ export default function ProfiloPage() {
     level: user.level || 1,
     xp: user.xp || 0,
     xpNext: 2000,
-    coins: profile?.coins || 0,
-    territories: 0,
-    totalConquered: 0,
+    coins: 0,
+    territories: territoryCount,
+    totalConquered: territoryCount,
     achievements: [] as string[],
-    interests: [] as string[],
+    interests: profile?.interests || [],
     streak: 0,
   };
 
@@ -245,8 +279,9 @@ export default function ProfiloPage() {
           </div>
 
           {/* Top 3 podium */}
+          {leaderboard.length >= 3 ? (
           <div className="flex justify-center items-end gap-2 mb-6">
-            {[MOCK_LEADERBOARD[1], MOCK_LEADERBOARD[0], MOCK_LEADERBOARD[2]].map(
+            {[leaderboard[1], leaderboard[0], leaderboard[2]].map(
               (player, i) => {
                 const heights = [80, 100, 60];
                 const medals = ["🥈", "🥇", "🥉"];
@@ -268,10 +303,15 @@ export default function ProfiloPage() {
               }
             )}
           </div>
+          ) : leaderboard.length > 0 ? (
+            <p className="text-center text-white/40 text-sm mb-6">Servono almeno 3 giocatori per il podio</p>
+          ) : (
+            <p className="text-center text-white/40 text-sm mb-6">Nessun giocatore in classifica</p>
+          )}
 
           {/* Full list */}
           <div className="space-y-2">
-            {MOCK_LEADERBOARD.map((player) => (
+            {leaderboard.map((player) => (
               <div
                 key={player.rank}
                 className={`glass rounded-xl p-3 flex items-center gap-3`}

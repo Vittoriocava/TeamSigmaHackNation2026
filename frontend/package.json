@@ -15,8 +15,7 @@
     "leaflet": "^1.9.4",
     "react-leaflet": "^5.0.0",
     "framer-motion": "^11.15.0",
-    "@supabase/supabase-js": "^2.47.0",
-    "zustand": "^5.0.0",
+"zustand": "^5.0.0",
     "lucide-react": "^0.468.0"
   },
   "devDependencies": {

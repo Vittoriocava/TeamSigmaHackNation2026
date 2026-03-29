@@ -40,7 +40,7 @@ def _lang(profile: UserProfile) -> str:
 
 def _strip_thinking(text: str) -> str:
     """Remove <think>...</think> blocks emitted by reasoning models (e.g. Qwen3)."""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    return re.sub(r"<think>.*?(?:</think>|$)", "", text, flags=re.DOTALL).strip()
 
 
 def _chat(messages: list, max_tokens: int = 500) -> str:
@@ -62,14 +62,14 @@ def _extract_json_object(text: str) -> dict:
     start = text.find("{")
     end = text.rfind("}") + 1
     if start == -1 or end == 0:
-        raise ValueError(f"No JSON object found in response: {text[:200]}")
+        raise ValueError(f"No JSON object found in response: {repr(text)}")
     return json.loads(text[start:end])
 
 
 def _extract_json_array(text: str) -> list:
     start = text.find("[")
     if start == -1:
-        raise ValueError(f"No JSON array found in response: {text[:200]}")
+        raise ValueError(f"No JSON array found in response: {repr(text)}")
     end = text.rfind("]") + 1
     candidate = text[start:end] if end > 0 else text[start:]
     try:
@@ -151,8 +151,9 @@ Ogni oggetto deve avere questi campi:
             pass
         return None
 
+    seen_ids: set[str] = set()
     result = []
-    for item in raw:
+    for idx, item in enumerate(raw):
         name = item.get("name", "").strip()
         if not name:
             continue
@@ -176,7 +177,11 @@ Ogni oggetto deve avere questi campi:
         else:
             continue  # no usable coordinates at all
 
-        poi_id = f"ai_{hashlib.md5(name.encode()).hexdigest()[:10]}"
+        # Ensure unique IDs — include index to avoid hash collisions on same name
+        base_id = f"ai_{hashlib.md5(name.encode()).hexdigest()[:10]}"
+        poi_id = base_id if base_id not in seen_ids else f"{base_id}_{idx}"
+        seen_ids.add(poi_id)
+
         result.append({
             "id": poi_id,
             "name": name,
@@ -224,7 +229,7 @@ Rispondi SOLO con JSON valido:
   "source": "fonte verificabile"
 }}"""
 
-    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=500)
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=4000)
     data = _extract_json_object(text)
     data["poi_id"] = poi.id
     data["difficulty"] = difficulty
@@ -251,7 +256,7 @@ Regole OBBLIGATORIE:
 - Includi un fatto sorprendente poco noto MA verificabile su questo specifico luogo
 - Chiudi con una connessione emotiva o una domanda retorica"""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=600)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def generate_curiosity(poi: POI, profile: UserProfile) -> str:
@@ -263,7 +268,7 @@ Livello: {profile.cultural_level}
 
 Max 80 parole. Tono: "lo sapevi che...?" coinvolgente."""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=200)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def generate_connection(poi1: POI, poi2: POI, profile: UserProfile) -> str:
@@ -275,7 +280,7 @@ La connessione può essere storica, artistica, leggendaria o urbana.
 Lingua: {_lang(profile)}
 Max 100 parole. Tono narrativo, come se stessi svelando un segreto."""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=250)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def analyze_photo(image_base64: str, poi: POI | None = None) -> dict:
@@ -316,7 +321,7 @@ Il prompt deve produrre un'immagine fotorealistica, prospettiva frontale, luce n
 Includi dettagli storici accurati: architettura, persone, vestiti, atmosfera dell'epoca.
 Rispondi SOLO con il prompt in inglese, nient'altro. Max 200 parole."""
 
-    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
+    return await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
 
 
 async def rank_pois(
@@ -390,8 +395,118 @@ Deduci e rispondi SOLO con JSON:
   "age_range": "fascia dedotta o null"
 }}"""
 
-    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=300)
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=1000)
     return _extract_json_object(text)
+
+
+async def generate_trip_itinerary(
+    city: str,
+    pois: list[dict],
+    trip_profile,  # TripProfile — avoid circular import
+    user_profile: UserProfile,
+) -> list[dict]:
+    """Generate a day-by-day itinerary from a list of liked POIs."""
+    import math as _math
+
+    poi_list = json.dumps(
+        [
+            {
+                "id": p.get("id", ""),
+                "name": p.get("name", ""),
+                "category": p.get("category", "attraction"),
+                "estimated_duration": p.get("estimated_duration", 45),
+                "estimated_cost": p.get("estimated_cost", "gratuito"),
+                "lat": p.get("lat", 0),
+                "lng": p.get("lng", 0),
+                "description": (p.get("description") or "")[:120],
+            }
+            for p in pois
+        ],
+        ensure_ascii=False,
+    )
+
+    prompt = f"""Sei un esperto pianificatore di viaggi italiani.
+Crea un itinerario di {trip_profile.days} giorni a {city}, Italia.
+
+Profilo viaggio:
+- Giorni disponibili: {trip_profile.days}
+- Budget: {trip_profile.budget}
+- Gruppo: {trip_profile.group}
+- Interessi: {trip_profile.interests}
+- Ritmo: {trip_profile.pace}
+- Stile: {trip_profile.experience_type}
+
+POI scelti dal viaggiatore: {poi_list}
+
+Istruzioni:
+- Distribuisci logicamente i POI nei {trip_profile.days} giorni per vicinanza geografica
+- Orari realistici: mattina 9:00-13:00, pomeriggio 14:00-18:00, sera 19:00+
+- Indica come spostarsi tra i posti (piedi/bus/metro/taxi)
+- Aggiungi suggerimenti pranzo e cena vicino ai luoghi del giorno
+- Ritmo "{trip_profile.pace}": slow = max 3 posti/giorno, medium = 4-5, fast = 6+
+
+OUTPUT: SOLO array JSON valido, {trip_profile.days} oggetti.
+
+Ogni oggetto giorno:
+{{
+  "day": 1,
+  "theme": "titolo descrittivo del giorno",
+  "stops": [
+    {{
+      "poi_id": "id",
+      "poi_name": "nome",
+      "arrival_time": "09:00",
+      "duration_min": 60,
+      "transport": "piedi",
+      "distance_from_prev": "500m a piedi",
+      "tips": "consiglio pratico utile per visitare questo posto"
+    }}
+  ],
+  "lunch_suggestion": "zona o tipo di posto per pranzo",
+  "dinner_suggestion": "zona o tipo di posto per cena",
+  "total_cost_estimate": "€/€€/€€€"
+}}
+
+["""
+
+    text = await _chat_async([{"role": "user", "content": prompt}], max_tokens=4000)
+    if not text.strip().startswith("["):
+        text = "[" + text
+
+    try:
+        days = _extract_json_array(text)
+        # Ensure correct day numbers
+        for i, d in enumerate(days):
+            d["day"] = i + 1
+        return days
+    except Exception:
+        # Fallback: simple day split
+        stops_per_day = max(1, _math.ceil(len(pois) / max(trip_profile.days, 1)))
+        result = []
+        for d in range(trip_profile.days):
+            chunk = pois[d * stops_per_day : (d + 1) * stops_per_day]
+            result.append(
+                {
+                    "day": d + 1,
+                    "theme": f"Giorno {d + 1} a {city}",
+                    "stops": [
+                        {
+                            "poi_id": p.get("id", ""),
+                            "poi_name": p.get("name", ""),
+                            "arrival_time": "09:00",
+                            "duration_min": p.get("estimated_duration", 45),
+                            "transport": "piedi",
+                            "distance_from_prev": "",
+                            "tips": "",
+                        }
+                        for p in chunk
+                    ],
+                    "lunch_suggestion": "Centro città",
+                    "dinner_suggestion": "Centro città",
+                    "total_cost_estimate": "€€",
+                }
+            )
+        return result
 
 
 def question_hash(q: QuizQuestion) -> str:

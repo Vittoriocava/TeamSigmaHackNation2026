@@ -39,38 +39,55 @@ interface Place {
 
 export default function ScopriPage() {
   const router = useRouter();
-  const { currentGame } = useStore();
+  const { currentGame, trip, savedItineraries, token } = useStore();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const city = currentGame?.city || "Roma";
+  // Città: trip attivo → ultimo itinerario salvato → gioco attivo → nessuna
+  const city = trip.city || savedItineraries[0]?.city || currentGame?.city || "";
+  const isPersonalized = trip.rankedPois.length > 0 && trip.city === city;
 
   useEffect(() => {
-    fetchPois();
+    if (!city) {
+      setLoading(false);
+      return;
+    }
+    if (isPersonalized) {
+      // Usa i POI già rankati dall'AI nel trip corrente
+      const placesData: Place[] = trip.rankedPois.map((poi) => ({
+        id: poi.id,
+        name: poi.name,
+        category: poi.category || "altro",
+        visited: false,
+        description: poi.why_for_you || poi.description || "Scopri questo luogo affascinante",
+      }));
+      setPlaces(placesData);
+      setLoading(false);
+    } else {
+      fetchPois();
+    }
   }, [city]);
 
   const fetchPois = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/city/${city}/pois`);
-      if (!res.ok) {
-        throw new Error("Errore nel caricamento dei POI");
-      }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(`/api/city/${encodeURIComponent(city)}/pois`, { headers });
+      if (!res.ok) throw new Error("Errore nel caricamento dei POI");
       const data = await res.json();
-      
-      // Converti POI in Place format
+
       const placesData: Place[] = (data.pois || []).map((poi: any, index: number) => ({
         id: poi.id || `poi_${index}`,
         name: poi.name,
         category: poi.category || "altro",
         visited: false,
-        description: poi.description || "Scopri questo luogo affascinante",
+        description: poi.why_for_you || poi.description || "Scopri questo luogo affascinante",
       }));
-
       setPlaces(placesData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore sconosciuto");
@@ -78,7 +95,7 @@ export default function ScopriPage() {
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   const filtered = places.filter((p) => {
     if (activeCategory && p.category !== activeCategory) return false;
@@ -90,58 +107,68 @@ export default function ScopriPage() {
     <div className="min-h-screen pb-20">
       <header className="px-4 pt-12 pb-2">
         <h1 className="font-display text-2xl font-bold">Scopri</h1>
-        <p className="text-white/50 text-sm mt-1">{city} — Guida città</p>
+        <p className="text-white/50 text-sm mt-1">
+          {city ? `${city} — Guida città` : "Nessuna città selezionata"}
+        </p>
       </header>
 
-      {/* Search */}
-      <div className="px-4 mb-4">
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-          <input
-            type="text"
-            placeholder="Cerca un posto..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full glass rounded-xl py-2.5 pl-10 pr-10 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-primary/50"
-          />
-          <SlidersHorizontal size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40" />
-        </div>
-      </div>
-
-      {/* Categories */}
-      <div className="px-4 mb-4">
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.key}
-              onClick={() =>
-                setActiveCategory(activeCategory === cat.key ? null : cat.key)
-              }
-              className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                activeCategory === cat.key
-                  ? "bg-primary text-white"
-                  : `glass text-white/60`
-              }`}
-            >
-              <cat.icon size={14} />
-              {cat.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* AI Suggestion */}
-      <div className="px-4 mb-4">
-        <Card animate={false} className="bg-gradient-to-r from-primary/20 to-accent/10 border-primary/20 flex items-center gap-3">
-          <Sparkles size={20} className="text-accent flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-medium">Suggerimento AI per te</p>
-            <p className="text-xs text-white/60">
-              Scopri i luoghi più affascinanti di {city} personalizzati per te
-            </p>
+      {city && (
+        <>
+          {/* Search */}
+          <div className="px-4 mb-4">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+              <input
+                type="text"
+                placeholder="Cerca un posto..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full glass rounded-xl py-2.5 pl-10 pr-10 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+              <SlidersHorizontal size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40" />
+            </div>
           </div>
-        </Card>
-      </div>
+
+          {/* Categories */}
+          <div className="px-4 mb-4">
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.key}
+                  onClick={() =>
+                    setActiveCategory(activeCategory === cat.key ? null : cat.key)
+                  }
+                  className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                    activeCategory === cat.key
+                      ? "bg-primary text-white"
+                      : `glass text-white/60`
+                  }`}
+                >
+                  <cat.icon size={14} />
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* AI Suggestion */}
+          <div className="px-4 mb-4">
+            <Card animate={false} className="bg-gradient-to-r from-primary/20 to-accent/10 border-primary/20 flex items-center gap-3">
+              <Sparkles size={20} className="text-accent flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">
+                  {isPersonalized ? "Personalizzato per te" : "Suggerimento AI per te"}
+                </p>
+                <p className="text-xs text-white/60">
+                  {isPersonalized
+                    ? `${trip.rankedPois.length} luoghi scelti in base ai tuoi interessi a ${city}`
+                    : `Scopri i luoghi più affascinanti di ${city}`}
+                </p>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
 
       {/* Error State */}
       {error && (
@@ -153,6 +180,22 @@ export default function ScopriPage() {
               <p className="text-xs text-red-400/70">{error}</p>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* No city state */}
+      {!loading && !city && (
+        <div className="px-4 flex items-center justify-center py-16">
+          <div className="text-center">
+            <p className="text-white/60 text-sm mb-2">Nessuna città selezionata</p>
+            <p className="text-white/40 text-xs">Crea un piano di viaggio per vedere i luoghi consigliati</p>
+            <button
+              onClick={() => router.push("/")}
+              className="mt-4 px-4 py-2 bg-primary/20 text-primary text-sm rounded-xl"
+            >
+              Vai alla home
+            </button>
+          </div>
         </div>
       )}
 
@@ -168,7 +211,7 @@ export default function ScopriPage() {
         /* Places list */
         <section className="px-4">
           <div className="space-y-2">
-            {filtered.length === 0 ? (
+            {city && filtered.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-white/50 text-sm">Nessun luogo trovato</p>
               </div>

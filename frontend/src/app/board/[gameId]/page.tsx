@@ -7,17 +7,18 @@ import { apiPost } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-    AlertCircle,
-    BookOpen,
-    Camera,
-    ChevronDown, ChevronUp,
-    Coins,
-    Eye,
-    HelpCircle,
-    Link2,
-    MapPin,
-    Trophy,
-    Volume2,
+  AlertCircle,
+  BookOpen,
+  Camera,
+  ChevronDown,
+  ChevronUp,
+  Coins,
+  Eye,
+  HelpCircle,
+  Link2,
+  MapPin,
+  Trophy,
+  Volume2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -54,7 +55,7 @@ const LOADING_STEPS = [
 interface GameData {
   id: string;
   city: string;
-  city_slug: string;
+  city_slug?: string;
   mode: string;
   stops: Array<{
     poi: {
@@ -73,7 +74,7 @@ function BoardContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { profile, token } = useStore();
+  const { profile, token, currentGame } = useStore();
 
   const gameId = params.gameId as string;
   const city = searchParams.get("city") || "";
@@ -90,6 +91,31 @@ function BoardContent() {
   const [completedStops, setCompletedStops] = useState<Set<number>>(new Set());
 
   useEffect(() => {
+    // If we have a local game ID (from create-demo), use the board stored in Zustand
+    if (gameId.startsWith("local-")) {
+      if (currentGame && currentGame.id === gameId) {
+        setGame({
+          id: currentGame.id,
+          city: currentGame.city,
+          city_slug: currentGame.citySlug,
+          mode: currentGame.mode,
+          stops: currentGame.stops as GameData["stops"],
+        });
+      } else if (currentGame) {
+        // Different local ID but we have board data — use it anyway
+        setGame({
+          id: gameId,
+          city: currentGame.city || city,
+          city_slug: currentGame.citySlug,
+          mode: currentGame.mode,
+          stops: currentGame.stops as GameData["stops"],
+        });
+      } else {
+        setError("Partita non trovata. Torna alla home e ricomincia.");
+      }
+      return;
+    }
+
     if (gameId !== "new" || !city) return;
 
     const generate = async () => {
@@ -133,7 +159,8 @@ function BoardContent() {
     };
 
     generate();
-  }, [gameId, city, mode, profile, token]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, city, mode, profile, token, currentGame]);
 
   const handleComplete = () => {
     setCompletedStops((prev) => new Set([...prev, currentStop]));
@@ -297,7 +324,7 @@ function BoardContent() {
               {stop.type === "story" && (
                 <div>
                   <p className="text-sm text-white/80 leading-relaxed">
-                    {stop.content.story as string}
+                    {(stop.content.story as string) || (stop.content.description as string) || stop.poi.description}
                   </p>
                   <Button variant="ghost" size="sm" className="mt-3 flex items-center gap-2">
                     <Volume2 size={14} /> Ascolta narrazione
@@ -305,39 +332,47 @@ function BoardContent() {
                 </div>
               )}
 
-              {stop.type === "quiz" && quiz && (
+              {stop.type === "quiz" && (
                 <div>
-                  <p className="font-medium mb-3">{quiz.question}</p>
-                  <div className="space-y-2">
-                    {quiz.options.map((opt, i) => (
-                      <motion.button
-                        key={i}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setQuizAnswer(i)}
-                        disabled={quizAnswer !== null}
-                        className={`w-full text-left p-3 rounded-xl text-sm transition-all ${
-                          quizAnswer === null
-                            ? "glass hover:bg-white/20"
-                            : i === quiz.correct_index
-                            ? "bg-green-500/20 border border-green-500/40"
-                            : quizAnswer === i
-                            ? "bg-red-500/20 border border-red-500/40"
-                            : "glass opacity-50"
-                        }`}
-                      >
-                        <span className="text-white/40 mr-2">{String.fromCharCode(65 + i)}.</span>
-                        {opt}
-                      </motion.button>
-                    ))}
-                  </div>
-                  {quizAnswer !== null && (
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-xs text-white/60 mt-3 glass rounded-xl p-3"
-                    >
-                      {quiz.explanation}
-                    </motion.p>
+                  {quiz ? (
+                    <>
+                      <p className="font-medium mb-3">{quiz.question}</p>
+                      <div className="space-y-2">
+                        {quiz.options.map((opt, i) => (
+                          <motion.button
+                            key={i}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setQuizAnswer(i)}
+                            disabled={quizAnswer !== null}
+                            className={`w-full text-left p-3 rounded-xl text-sm transition-all ${
+                              quizAnswer === null
+                                ? "glass hover:bg-white/20"
+                                : i === quiz.correct_index
+                                ? "bg-green-500/20 border border-green-500/40"
+                                : quizAnswer === i
+                                ? "bg-red-500/20 border border-red-500/40"
+                                : "glass opacity-50"
+                            }`}
+                          >
+                            <span className="text-white/40 mr-2">{String.fromCharCode(65 + i)}.</span>
+                            {opt}
+                          </motion.button>
+                        ))}
+                      </div>
+                      {quizAnswer !== null && (
+                        <motion.p
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="text-xs text-white/60 mt-3 glass rounded-xl p-3"
+                        >
+                          {quiz.explanation}
+                        </motion.p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-white/80 leading-relaxed">
+                      {(stop.content.description as string) || stop.poi.description}
+                    </p>
                   )}
                 </div>
               )}
@@ -345,7 +380,7 @@ function BoardContent() {
               {stop.type === "curiosity" && (
                 <div className="glass-dark rounded-xl p-3">
                   <p className="text-sm text-white/80 italic">
-                    💡 {stop.content.curiosity as string}
+                    💡 {(stop.content.curiosity as string) || (stop.content.description as string) || stop.poi.description}
                   </p>
                 </div>
               )}
@@ -353,7 +388,7 @@ function BoardContent() {
               {stop.type === "connection" && (
                 <div className="glass-dark rounded-xl p-3">
                   <p className="text-sm text-white/80">
-                    🔗 {stop.content.connection as string}
+                    🔗 {(stop.content.connection as string) || (stop.content.description as string) || stop.poi.description}
                   </p>
                 </div>
               )}

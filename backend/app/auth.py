@@ -11,15 +11,10 @@ def get_token_from_header(request: Request) -> str:
 
 
 def verify_token(token: str) -> str:
-    """Decode Supabase JWT and return user_id."""
+    """Decode JWT and return user_id."""
     settings = get_settings()
     try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Token non valido")

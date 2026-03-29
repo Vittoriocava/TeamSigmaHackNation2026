@@ -1,22 +1,11 @@
 "use client";
 
-import { BottomNav } from "@/components/UI/BottomNav";
-import { apiGet } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-    Bell,
-    ChevronRight,
-    MapPin,
-    Search,
-    Shield,
-    Users,
-    Zap
-} from "lucide-react";
+import { ChevronRight, MapPin, Search, Shield, User, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-// Tutti i capoluoghi di provincia italiani (107)
 const ITALIAN_CITIES = [
   "Agrigento", "Alessandria", "Ancona", "Aosta", "Arezzo", "Ascoli Piceno",
   "Asti", "Avellino", "Bari", "Barletta", "Belluno", "Benevento", "Bergamo",
@@ -34,42 +23,23 @@ const ITALIAN_CITIES = [
   "Siena", "Siracusa", "Sondrio", "Sud Sardegna", "Taranto", "Teramo",
   "Terni", "Torino", "Trapani", "Trento", "Treviso", "Trieste", "Udine",
   "Varese", "Venezia", "Verbania", "Vercelli", "Verona", "Vibo Valentia",
-  "Vicenza", "Viterbo",
-  // Altre città
-  "Scalea",
+  "Vicenza", "Viterbo", "Scalea",
 ];
-
-const MOCK_TRIPS = [
-  { city: "Roma", startDate: "Mar 28", endDate: "Mar 31", progress: 65, emoji: "🏛️" },
-  { city: "Firenze", startDate: "Apr 5", endDate: "Apr 8", progress: 30, emoji: "⛪" },
-];
-
-const ICON_MAP: Record<string, typeof Zap> = {
-  Zap: Zap,
-  Shield: Shield,
-  MapPin: MapPin,
-};
-
-interface Action {
-  type: string;
-  text: string;
-  icon: string;
-  color: string;
-  href?: string;
-}
 
 const CITY_EMOJIS: Record<string, string> = {
-  Roma: "🏛️", Firenze: "⛪", Venezia: "🚤", Napoli: "🍕", Milano: "🏙️", Bologna: "🎻",
+  Roma: "🏛️", Firenze: "⛪", Venezia: "🚤", Napoli: "🍕",
+  Milano: "🏙️", Bologna: "🎻",
 };
+
+const NEARBY_ROMA = ["Tivoli", "Frascati", "Ostia", "Castel Gandolfo"];
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, isHydrated, token } = useStore();
+  const { user, isHydrated, savedItineraries, currentGame } = useStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [actions, setActions] = useState<Action[]>([]);
-  const [loadingActions, setLoadingActions] = useState(true);
+  const [showNearby, setShowNearby] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -83,71 +53,85 @@ export default function HomePage() {
     setSuggestions(ITALIAN_CITIES.filter((c) => c.toLowerCase().startsWith(q)).slice(0, 6));
   }, [searchQuery]);
 
-  // Load user actions from backend
-  useEffect(() => {
-    const fetchActions = async () => {
-      try {
-        const response = await apiGet<{ actions: Action[] }>(
-          "/api/game/user/actions",
-          token || undefined
-        );
-        // Add default hrefs if not present
-        const actionsWithHrefs = (response.actions || []).map((action: Action) => ({
-          ...action,
-          href: action.type === "new_quiz" ? "/quiz-live" : "/scopri"
-        }));
-        setActions(actionsWithHrefs);
-      } catch (error) {
-        console.error("Failed to load actions:", error);
-        // Fallback to default action
-        setActions([{
-          type: "new_quiz",
-          text: "Scopri nuove sfide",
-          icon: "Zap",
-          color: "bg-blue-500/20",
-          href: "/quiz-live"
-        }]);
-      } finally {
-        setLoadingActions(false);
-      }
-    };
-
-    if (isHydrated && user) {
-      fetchActions();
-    }
-  }, [isHydrated, user, token]);
-
-  const goToCity = (city: string, mode = "solo") => {
+  const goToNewTrip = (city: string) => {
     setShowSuggestions(false);
-    router.push(`/board/new?city=${encodeURIComponent(city)}&mode=${mode}`);
+    router.push(`/pianifica/${encodeURIComponent(city)}`);
+  };
+
+  const goToTrip = (city: string) => {
+    router.push(`/viaggio/${encodeURIComponent(city)}`);
   };
 
   if (!isHydrated || !user) return null;
 
+  // Build "I tuoi viaggi" list
+  const activeCity = currentGame?.city ?? null;
+  const viaggi: { city: string; status: "attivo" | "futuro"; subtitle: string }[] = [];
+
+  if (activeCity) {
+    viaggi.push({
+      city: activeCity,
+      status: "attivo",
+      subtitle: `${currentGame!.stops.filter((s) => s.completed).length}/${currentGame!.stops.length} tappe completate`,
+    });
+  }
+
+  for (const itin of savedItineraries) {
+    if (itin.city === activeCity) continue; // già mostrato come attivo
+    viaggi.push({
+      city: itin.city,
+      status: "futuro",
+      subtitle: `${itin.days} giorni · ${itin.likedPoisCount} posti · ${new Date(itin.createdAt).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}`,
+    });
+  }
+
+  // Azioni
+  const completedStops = currentGame?.stops.filter((s) => s.completed).length ?? 0;
+  const futureTripCount = savedItineraries.filter((s) => s.city !== activeCity).length;
+
+  const azioni = [
+    {
+      icon: Shield,
+      color: "bg-yellow-500/20 text-yellow-400",
+      text: completedStops > 0 ? `${completedStops} posti da difendere` : "I tuoi territori",
+      href: "/territorio",
+    },
+    {
+      icon: MapPin,
+      color: "bg-green-500/20 text-green-400",
+      text: "Città vicine a Roma",
+      href: null, // apre inline
+    },
+    {
+      icon: Zap,
+      color: "bg-blue-500/20 text-blue-400",
+      text: futureTripCount > 0
+        ? `${futureTripCount} itinerar${futureTripCount === 1 ? "io" : "i"} futur${futureTripCount === 1 ? "o" : "i"} da preparare`
+        : "Prepara il prossimo viaggio",
+      href: futureTripCount > 0
+        ? `/viaggio/${encodeURIComponent(savedItineraries.find(s => s.city !== activeCity)?.city ?? "")}`
+        : null,
+    },
+  ];
+
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-8">
       {/* Header */}
       <header className="px-4 pt-12 pb-4">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="font-display text-2xl font-bold">Play The City</h1>
-            <p className="text-white/50 text-sm mt-1">Ciao {user.displayName}</p>
+            <p className="text-white/50 text-sm mt-1">Ciao, {user.displayName}</p>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => router.push("/profilo")}
-              className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center"
-            >
-              <Users size={18} className="text-primary-light" />
-            </button>
-            <button className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center relative">
-              <Bell size={18} />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center">3</span>
-            </button>
-          </div>
+          <button
+            onClick={() => router.push("/profilo")}
+            className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center"
+          >
+            <User size={18} className="text-primary-light" />
+          </button>
         </div>
 
-        {/* Search + Autocomplete */}
+        {/* Search */}
         <div className="relative">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 z-10" />
           <input
@@ -161,7 +145,7 @@ export default function HomePage() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && searchQuery.trim()) {
                 const match = ITALIAN_CITIES.find((c) => c.toLowerCase() === searchQuery.toLowerCase());
-                goToCity(match || searchQuery);
+                goToNewTrip(match || searchQuery);
               }
             }}
             className="w-full glass rounded-2xl py-3.5 pl-11 pr-4 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -175,7 +159,7 @@ export default function HomePage() {
               {suggestions.map((city) => (
                 <button
                   key={city}
-                  onMouseDown={() => goToCity(city)}
+                  onMouseDown={() => goToNewTrip(city)}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition-colors text-left"
                 >
                   <MapPin size={14} className="text-primary-light flex-shrink-0" />
@@ -195,7 +179,7 @@ export default function HomePage() {
             <motion.button
               key={city}
               whileTap={{ scale: 0.95 }}
-              onClick={() => goToCity(city)}
+              onClick={() => goToNewTrip(city)}
               className="flex-shrink-0 glass rounded-2xl px-4 py-3 flex flex-col items-center gap-1 min-w-[76px]"
             >
               <span className="text-xl">{CITY_EMOJIS[city] ?? "🗺️"}</span>
@@ -208,82 +192,99 @@ export default function HomePage() {
       {/* I tuoi viaggi */}
       <section className="px-4 mb-6">
         <h2 className="font-display text-lg font-semibold mb-3">I tuoi viaggi</h2>
-        <div className="space-y-3">
-          {MOCK_TRIPS.map((trip, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="glass rounded-2xl p-4"
+        {viaggi.length === 0 ? (
+          <div className="glass rounded-2xl p-6 text-center">
+            <p className="text-white/50 text-sm mb-3">Nessun viaggio ancora</p>
+            <button
+              onClick={() => inputRef.current?.focus()}
+              className="text-primary text-sm font-medium"
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{trip.emoji}</span>
-                  <div>
-                    <h3 className="font-semibold text-sm">{trip.city}</h3>
-                    <p className="text-xs text-white/50">{trip.startDate} - {trip.endDate}</p>
+              Pianifica il tuo primo viaggio →
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <AnimatePresence>
+              {viaggi.map((v, i) => (
+                <motion.button
+                  key={`${v.city}-${v.status}-${i}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.07 }}
+                  onClick={() => goToTrip(v.city)}
+                  className="w-full glass rounded-2xl p-4 flex items-center gap-4 text-left hover:bg-white/10 transition-colors"
+                >
+                  <span className="text-3xl">{CITY_EMOJIS[v.city] ?? "🗺️"}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-semibold text-sm">{v.city}</h3>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        v.status === "attivo"
+                          ? "bg-green-500/20 text-green-400"
+                          : "bg-blue-500/20 text-blue-400"
+                      }`}>
+                        {v.status === "attivo" ? "In corso" : "Futuro"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/50 truncate">{v.subtitle}</p>
                   </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-primary-light transition-all"
-                    style={{ width: `${trip.progress}%` }}
-                  />
-                </div>
-                <span className="text-xs font-medium text-white/60">{trip.progress}%</span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                  <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
+                </motion.button>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </section>
 
       {/* Azioni da fare */}
       <section className="px-4 mb-6">
         <h2 className="font-display text-lg font-semibold mb-3">Azioni da fare</h2>
-        {loadingActions ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <AnimatePresence>
-            {actions.map((action, i) => {
-              const IconComponent = ICON_MAP[action.icon] || MapPin;
-              let href = "/scopri";
-              
-              // Route actions to appropriate pages
-              if (action.type === "territories") {
-                href = "/territorio";
-              } else if (action.type === "nearby_cities") {
-                href = "/scopri";
-              } else if (action.type === "future_quizzes") {
-                href = "/quiz-live";
-              }
-              
-              return (
-                <motion.button
-                  key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  onClick={() => router.push(href)}
-                  className="w-full glass rounded-xl p-3 mb-2 flex items-center gap-3 hover:bg-white/20 transition-colors"
+        <div className="space-y-2">
+          {azioni.map((action, i) => {
+            const Icon = action.icon;
+            return (
+              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
+                <button
+                  onClick={() => {
+                    if (action.href) {
+                      router.push(action.href);
+                    } else if (i === 1) {
+                      setShowNearby((v) => !v);
+                    }
+                  }}
+                  className="w-full glass rounded-xl p-3 flex items-center gap-3 hover:bg-white/10 transition-colors"
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${action.color}`}>
-                    <IconComponent size={14} />
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${action.color}`}>
+                    <Icon size={16} />
                   </div>
                   <span className="text-sm flex-1 text-left">{action.text}</span>
-                  <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
-                </motion.button>
-              );
-            })}
-          </AnimatePresence>
-        )}
-      </section>
+                  <ChevronRight size={16} className={`text-white/30 flex-shrink-0 transition-transform ${i === 1 && showNearby ? "rotate-90" : ""}`} />
+                </button>
 
-      <BottomNav />
+                {/* Città vicine inline */}
+                {i === 1 && showNearby && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-2 ml-3 flex flex-wrap gap-2"
+                  >
+                    {NEARBY_ROMA.map((city) => (
+                      <button
+                        key={city}
+                        onClick={() => goToNewTrip(city)}
+                        className="glass rounded-xl px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 transition-colors"
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
